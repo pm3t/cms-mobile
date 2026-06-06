@@ -1,6 +1,8 @@
 {
   "version": 2,
   "name": "eklesia-mobile-web",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "cleanUrls": true,
   "rewrites": [
     {

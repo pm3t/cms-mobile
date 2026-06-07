@@ -8,8 +8,6 @@ import HomeScreen from './src/screens/HomeScreen';
 import GivingScreen from './src/screens/GivingScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import MediaScreen from './src/screens/MediaScreen';
-import PrayerScreen from './src/screens/PrayerScreen';
-import MinistryScreen from './src/screens/MinistryScreen';
 
 function MainApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -48,28 +46,18 @@ function MainApp() {
       <View style={styles.content}>
         {tab === 'HOME' && <HomeScreen />}
         {tab === 'MEDIA' && <MediaScreen />}
-        {tab === 'PRAYER' && <PrayerScreen />}
-        {tab === 'MINISTRY' && <MinistryScreen />}
         {tab === 'GIVING' && <GivingScreen />}
         {tab === 'PROFILE' && <ProfileScreen onLogout={checkToken} />}
       </View>
       
       <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <TouchableOpacity style={styles.tabItem} onPress={() => setTab('HOME')}>
-          <Ionicons name={tab === 'HOME' ? 'calendar' : 'calendar-outline'} size={20} color={tab === 'HOME' ? '#3b82f6' : '#64748b'} />
-          <Text style={[styles.tabText, tab === 'HOME' && styles.tabActive]}>Events</Text>
+          <Ionicons name={tab === 'HOME' ? 'home' : 'home-outline'} size={20} color={tab === 'HOME' ? '#3b82f6' : '#64748b'} />
+          <Text style={[styles.tabText, tab === 'HOME' && styles.tabActive]}>Home</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.tabItem} onPress={() => setTab('MEDIA')}>
           <Ionicons name={tab === 'MEDIA' ? 'play-circle' : 'play-circle-outline'} size={20} color={tab === 'MEDIA' ? '#3b82f6' : '#64748b'} />
           <Text style={[styles.tabText, tab === 'MEDIA' && styles.tabActive]}>Media</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => setTab('PRAYER')}>
-          <Ionicons name={tab === 'PRAYER' ? 'chatbubbles' : 'chatbubbles-outline'} size={20} color={tab === 'PRAYER' ? '#3b82f6' : '#64748b'} />
-          <Text style={[styles.tabText, tab === 'PRAYER' && styles.tabActive]}>Prayer</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => setTab('MINISTRY')}>
-          <Ionicons name={tab === 'MINISTRY' ? 'people' : 'people-outline'} size={20} color={tab === 'MINISTRY' ? '#3b82f6' : '#64748b'} />
-          <Text style={[styles.tabText, tab === 'MINISTRY' && styles.tabActive]}>Pelayanan</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.tabItem} onPress={() => setTab('GIVING')}>
           <Ionicons name={tab === 'GIVING' ? 'heart' : 'heart-outline'} size={20} color={tab === 'GIVING' ? '#3b82f6' : '#64748b'} />

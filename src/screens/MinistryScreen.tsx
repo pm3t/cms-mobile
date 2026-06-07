@@ -12,8 +12,13 @@ import {
   Alert 
 } from 'react-native';
 import { client } from '../api/client';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function MinistryScreen() {
+interface MinistryScreenProps {
+  onClose?: () => void;
+}
+
+export default function MinistryScreen({ onClose }: MinistryScreenProps) {
   const [activeTab, setActiveTab] = useState<'MY_SERVICE' | 'RECRUITMENT'>('MY_SERVICE');
   const [recruitments, setRecruitments] = useState<any[]>([]);
   const [myRosters, setMyRosters] = useState<any[]>([]);
@@ -99,7 +104,14 @@ export default function MinistryScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Pelayanan</Text>
+      <View style={styles.headerRow}>
+        {onClose && (
+          <TouchableOpacity style={styles.backButton} onPress={onClose}>
+            <Ionicons name="arrow-back" size={24} color="#1e293b" />
+          </TouchableOpacity>
+        )}
+        <Text style={styles.header}>Pelayanan</Text>
+      </View>
 
       {/* Tab Switcher */}
       <View style={styles.tabContainer}>
@@ -261,7 +273,14 @@ export default function MinistryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc', padding: 16 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { fontSize: 24, fontWeight: 'bold', color: '#1e293b', marginBottom: 16, marginTop: 40 },
+  headerRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 16, 
+    marginTop: 40 
+  },
+  backButton: { marginRight: 12, padding: 4 },
+  header: { fontSize: 24, fontWeight: 'bold', color: '#1e293b' },
   
   // Tab Switcher Styles
   tabContainer: {

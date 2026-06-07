@@ -98,7 +98,7 @@ export default function MediaScreen() {
                 </View>
                 <Text style={styles.cardTitle}>{item.title}</Text>
                 <Text style={styles.cardText}>
-                  Diterbitkan: {item.date ? new Date(item.date).toLocaleDateString('id-ID', { dateStyle: 'long' }) : '-'}
+                  Diterbitkan: {(item.publishDate || item.date) ? new Date(item.publishDate || item.date).toLocaleDateString('id-ID', { dateStyle: 'long' }) : '-'}
                 </Text>
                 {item.content && <Text style={styles.cardContent}>{item.content}</Text>}
                 {item.pdfUrl && <Text style={styles.linkText}>Unduh PDF Warta ↗</Text>}

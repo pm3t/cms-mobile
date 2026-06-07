@@ -14,6 +14,7 @@ import {
   Platform,
   RefreshControl
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { client, SERVER_BASE_URL } from '../api/client';
 

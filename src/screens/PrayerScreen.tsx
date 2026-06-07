@@ -14,8 +14,13 @@ import {
 } from 'react-native';
 import { client } from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function PrayerScreen() {
+interface PrayerScreenProps {
+  onClose?: () => void;
+}
+
+export default function PrayerScreen({ onClose }: PrayerScreenProps) {
   const [activeTab, setActiveTab] = useState<'MY_PRAYERS' | 'PUBLIC_PRAYERS'>('MY_PRAYERS');
   const [myPrayers, setMyPrayers] = useState<any[]>([]);
   const [publicPrayers, setPublicPrayers] = useState<any[]>([]);
@@ -124,7 +129,14 @@ export default function PrayerScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Text style={styles.header}>Pastoral Prayer Request</Text>
+      <View style={styles.headerRow}>
+        {onClose && (
+          <TouchableOpacity style={styles.backButton} onPress={onClose}>
+            <Ionicons name="arrow-back" size={24} color="#1e293b" />
+          </TouchableOpacity>
+        )}
+        <Text style={styles.header}>Prayer Request</Text>
+      </View>
       <Text style={styles.subtitle}>Saling mendukung di dalam doa. Setiap permohonan Anda berharga.</Text>
 
       {/* Tabs */}
@@ -291,7 +303,14 @@ export default function PrayerScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc', padding: 16 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 200 },
-  header: { fontSize: 24, fontWeight: 'bold', color: '#1e293b', marginBottom: 8, marginTop: 40 },
+  headerRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 4, 
+    marginTop: 40 
+  },
+  backButton: { marginRight: 12, padding: 4 },
+  header: { fontSize: 24, fontWeight: 'bold', color: '#1e293b' },
   subtitle: { fontSize: 14, color: '#64748b', marginBottom: 20 },
   
   // Tabs

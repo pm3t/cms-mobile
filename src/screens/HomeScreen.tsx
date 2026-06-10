@@ -9,7 +9,7 @@ import PrayerScreen from './PrayerScreen';
 import MinistryScreen from './MinistryScreen';
 import SmallGroupScreen from './SmallGroupScreen';
 import SacramentRequestScreen from './SacramentRequestScreen';
-import InboxScreen from './InboxScreen';
+
 
 export default function HomeScreen() {
   const [events, setEvents] = useState<any[]>([]);
@@ -21,8 +21,7 @@ export default function HomeScreen() {
   const [isMinistryOpen, setIsMinistryOpen] = useState(false);
   const [isSmallGroupOpen, setIsSmallGroupOpen] = useState(false);
   const [isSacramentOpen, setIsSacramentOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isInboxOpen, setIsInboxOpen] = useState(false);
+
 
   const fetchEvents = async () => {
     try {
@@ -37,17 +36,8 @@ export default function HomeScreen() {
     }
   };
 
-  const fetchUnreadCount = async () => {
-    try {
-      const res = await client.get('/notifications?page=1');
-      setUnreadCount(res.data.unreadCount || 0);
-    } catch (err) {
-      console.log('Failed to fetch unread notification count:', err);
-    }
-  };
-
   const loadAllData = async () => {
-    await Promise.all([fetchEvents(), fetchUnreadCount()]);
+    await fetchEvents();
     setLoading(false);
   };
 
@@ -91,21 +81,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Top Sticky Header */}
-      <View style={styles.topHeader}>
-        <View>
-          <Text style={styles.headerAppTitle}>CMS Eklesia</Text>
-          <Text style={styles.headerAppSubtitle}>Jemaat App</Text>
-        </View>
-        <TouchableOpacity style={styles.bellButton} onPress={() => setIsInboxOpen(true)}>
-          <Ionicons name="notifications-outline" size={22} color="#1e293b" />
-          {unreadCount > 0 && (
-            <View style={styles.badgeContainer}>
-              <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+
 
       <FlatList
         data={events}
@@ -279,19 +255,7 @@ export default function HomeScreen() {
         <SacramentRequestScreen onClose={() => setIsSacramentOpen(false)} />
       </Modal>
 
-      <Modal
-        visible={isInboxOpen}
-        animationType="slide"
-        onRequestClose={() => {
-          setIsInboxOpen(false);
-          fetchUnreadCount();
-        }}
-      >
-        <InboxScreen onClose={() => {
-          setIsInboxOpen(false);
-          fetchUnreadCount();
-        }} />
-      </Modal>
+
     </View>
   );
 }
@@ -443,61 +407,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600'
   },
-  empty: { textAlign: 'center', color: '#94a3b8', marginTop: 32 },
-  topHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    marginBottom: 8,
-  },
-  headerAppTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  headerAppSubtitle: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  bellButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  badgeContainer: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
+  empty: { textAlign: 'center', color: '#94a3b8', marginTop: 32 }
 });

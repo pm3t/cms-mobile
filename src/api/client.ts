@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Use EXPO_PUBLIC_ env var for React Native / Expo
 // Set EXPO_PUBLIC_API_URL in your .env / eas.json for production
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.1.9:3000/api/mobile';
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.1.12:3000/api/mobile';
 
 export const SERVER_BASE_URL = API_URL.replace(/\/api\/mobile$/, '');
 

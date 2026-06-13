@@ -81,15 +81,21 @@ export default function SacramentRequestScreen({ onClose }: SacramentRequestScre
     try {
       const imageUri = result.assets[0].uri;
       const filename = imageUri.split('/').pop() || 'document.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const fileType = match ? `image/${match[1]}` : `image/jpeg`;
 
       const formData = new FormData();
-      formData.append('file', {
-        uri: imageUri,
-        name: filename,
-        type: fileType
-      } as any);
+      if (Platform.OS === 'web') {
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        formData.append('file', blob, filename);
+      } else {
+        const match = /\.(\w+)$/.exec(filename);
+        const fileType = match ? `image/${match[1]}` : `image/jpeg`;
+        formData.append('file', {
+          uri: imageUri,
+          name: filename,
+          type: fileType
+        } as any);
+      }
 
       const res = await client.post('/sacrament-requests/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }

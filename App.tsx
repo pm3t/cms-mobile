@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Modal, Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,31 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import MediaScreen from './src/screens/MediaScreen';
 import { client } from './src/api/client';
 import InboxScreen from './src/screens/InboxScreen';
+
+if (Platform.OS === 'web') {
+  Alert.alert = (title, message, buttons) => {
+    const text = message ? `${title}\n\n${message}` : title;
+    if (buttons && buttons.length > 1) {
+      const confirm = window.confirm(text);
+      if (confirm) {
+        const positiveButton = buttons.find(b => b.style !== 'cancel');
+        if (positiveButton && positiveButton.onPress) {
+          positiveButton.onPress();
+        }
+      } else {
+        const negativeButton = buttons.find(b => b.style === 'cancel');
+        if (negativeButton && negativeButton.onPress) {
+          negativeButton.onPress();
+        }
+      }
+    } else {
+      window.alert(text);
+      if (buttons && buttons[0] && buttons[0].onPress) {
+        buttons[0].onPress();
+      }
+    }
+  };
+}
 
 function MainApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

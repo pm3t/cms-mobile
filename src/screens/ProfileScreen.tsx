@@ -129,15 +129,21 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
 
     const pickedUri = result.assets[0].uri;
     const filename = pickedUri.split('/').pop() || 'avatar.jpg';
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : `image/jpeg`;
 
     const formData = new FormData();
-    formData.append('file', {
-      uri: pickedUri,
-      name: filename,
-      type
-    } as any);
+    if (Platform.OS === 'web') {
+      const response = await fetch(pickedUri);
+      const blob = await response.blob();
+      formData.append('file', blob, filename);
+    } else {
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : `image/jpeg`;
+      formData.append('file', {
+        uri: pickedUri,
+        name: filename,
+        type
+      } as any);
+    }
 
     setPhotoLoading(true);
     try {

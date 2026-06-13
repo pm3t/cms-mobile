@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image, ScrollView, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { client } from '../api/client';
 
@@ -38,16 +38,24 @@ export default function GivingScreen() {
 
       // 1. Upload receipt if exists
       if (image) {
-        const filename = image.split('/').pop() || 'receipt.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image/jpeg`;
-
         const formData = new FormData();
-        formData.append('file', {
-          uri: image,
-          name: filename,
-          type
-        } as any);
+        const filename = image.split('/').pop() || 'receipt.jpg';
+
+        if (Platform.OS === 'web') {
+          // On Web, fetch the blob from the local URI
+          const response = await fetch(image);
+          const blob = await response.blob();
+          formData.append('file', blob, filename);
+        } else {
+          // On Native, use the React Native custom FormData object format
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : `image/jpeg`;
+          formData.append('file', {
+            uri: image,
+            name: filename,
+            type
+          } as any);
+        }
 
         const uploadRes = await client.post('/giving/upload', formData, {
           headers: {

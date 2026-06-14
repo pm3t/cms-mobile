@@ -12,10 +12,12 @@ import {
   Dimensions,
   Linking,
   Platform,
-  RefreshControl
+  RefreshControl,
+  Modal
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import QRCode from 'react-native-qrcode-svg';
 import { client, SERVER_BASE_URL } from '../api/client';
 
 const SERVER_URL = SERVER_BASE_URL;
@@ -27,6 +29,7 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState<'biodata' | 'family' | 'sacraments' | 'skills' | 'certificates'>('biodata');
   const [certificates, setCertificates] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [isCardVisible, setIsCardVisible] = useState(false);
 
   // General Lists (fetched from backend)
   const [allFamilies, setAllFamilies] = useState<any[]>([]);
@@ -348,6 +351,13 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
           </TouchableOpacity>
           <Text style={styles.profileName}>{profile.firstName} {profile.lastName || ''}</Text>
           <Text style={styles.profileEmail}>{profile.email}</Text>
+          
+          <TouchableOpacity 
+            style={styles.memberCardBtn} 
+            onPress={() => setIsCardVisible(true)}
+          >
+            <Text style={styles.memberCardBtnText}>🪪 Kartu Anggota Digital</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -709,6 +719,7 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
                     <Text style={styles.certTitle}>📜 {cert.type === 'BAPTISM' ? 'Sertifikat Baptis' :
                                                      cert.type === 'MARRIAGE' ? 'Sertifikat Pernikahan' :
                                                      cert.type === 'CONFIRMATION' ? 'Sertifikat Sidi' :
+                                                     cert.type === 'DEDICATION' ? 'Sertifikat Penyerahan Anak' :
                                                      cert.type === 'MEMBERSHIP' ? 'Sertifikat Keanggotaan' : 'Sertifikat Resmi'}</Text>
                     <Text style={styles.certNumber}>{cert.certificateNumber}</Text>
                   </View>
@@ -749,6 +760,70 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutText}>Log Out dari Akun</Text>
       </TouchableOpacity>
+
+      {/* DIGITAL MEMBER CARD MODAL */}
+      <Modal
+        visible={isCardVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsCardVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.memberCardContainer}>
+            {/* Card Header with Logo & Tenant Name */}
+            <View style={styles.memberCardHeader}>
+              <View style={styles.headerLogoRow}>
+                <Text style={styles.logoEmoji}>⛪</Text>
+                <Text style={styles.memberCardTenantName} numberOfLines={1}>
+                  {profile?.tenant?.name || 'Eklesia Church'}
+                </Text>
+              </View>
+              <Text style={styles.memberCardTag}>KARTU ANGGOTA</Text>
+            </View>
+
+            {/* Card Body */}
+            <View style={styles.memberCardBody}>
+              {/* Photo & Details Row */}
+              <View style={styles.detailsRow}>
+                <View style={styles.cardAvatarFrame}>
+                  {profile?.photoUrl ? (
+                    <Image source={{ uri: `${SERVER_URL}${profile.photoUrl}` }} style={styles.cardAvatarImage} />
+                  ) : (
+                    <View style={styles.cardAvatarPlaceholder}>
+                      <Text style={styles.cardAvatarPlaceholderText}>
+                        {profile?.firstName?.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.cardInfoCol}>
+                  <Text style={styles.cardMemberName} numberOfLines={1}>
+                    {profile?.firstName} {profile?.lastName || ''}
+                  </Text>
+                  <Text style={styles.cardMemberLabel}>ID Anggota:</Text>
+                  <Text style={styles.cardMemberId} numberOfLines={1}>{profile?.id}</Text>
+                  <Text style={styles.cardMemberLabel}>Telepon:</Text>
+                  <Text style={styles.cardMemberPhone} numberOfLines={1}>{profile?.phone || '-'}</Text>
+                </View>
+              </View>
+
+              {/* QR Code Divider */}
+              <View style={styles.cardDivider} />
+
+              {/* QR Code Section */}
+              <View style={styles.cardQrSection}>
+                <QRCode value={profile?.id || 'NO-ID'} size={150} />
+                <Text style={styles.cardQrInstruction}>Tunjukkan QR Code ini ke petugas saat check-in kebaktian</Text>
+              </View>
+            </View>
+
+            {/* Close Button */}
+            <TouchableOpacity style={styles.closeCardBtn} onPress={() => setIsCardVisible(false)}>
+              <Text style={styles.closeCardBtnText}>Tutup</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1012,5 +1087,168 @@ const styles = StyleSheet.create({
     borderColor: '#ef4444', 
     alignItems: 'center' 
   },
-  logoutText: { color: '#ef4444', fontSize: 15, fontWeight: 'bold' }
+  logoutText: { color: '#ef4444', fontSize: 15, fontWeight: 'bold' },
+
+  // Digital member card styles
+  memberCardBtn: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  memberCardBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: 'bold'
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  memberCardContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 340,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#f1f5f9'
+  },
+  memberCardHeader: {
+    backgroundColor: '#1e3a8a',
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  headerLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8
+  },
+  logoEmoji: {
+    fontSize: 18,
+    marginRight: 6
+  },
+  memberCardTenantName: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold'
+  },
+  memberCardTag: {
+    color: '#93c5fd',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5
+  },
+  memberCardBody: {
+    padding: 20
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  cardAvatarFrame: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    marginRight: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc'
+  },
+  cardAvatarImage: {
+    width: '100%',
+    height: '100%'
+  },
+  cardAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  cardAvatarPlaceholderText: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: 'bold'
+  },
+  cardInfoCol: {
+    flex: 1
+  },
+  cardMemberName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 6
+  },
+  cardMemberLabel: {
+    fontSize: 9,
+    color: '#64748b',
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+    marginTop: 4
+  },
+  cardMemberId: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: '#3b4256',
+    fontWeight: '600'
+  },
+  cardMemberPhone: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '500'
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginBottom: 20
+  },
+  cardQrSection: {
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  cardQrInstruction: {
+    fontSize: 11,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 16
+  },
+  closeCardBtn: {
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9'
+  },
+  closeCardBtnText: {
+    color: '#475569',
+    fontSize: 14,
+    fontWeight: 'bold'
+  }
 });

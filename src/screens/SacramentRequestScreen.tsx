@@ -35,7 +35,7 @@ export default function SacramentRequestScreen({ onClose }: SacramentRequestScre
   const [isFormOpen, setIsFormOpen] = useState(false);
   
   // New Request Form Fields
-  const [type, setType] = useState<'BAPTISM' | 'MARRIAGE' | 'CONFIRMATION' | 'MEMBERSHIP' | 'OTHER'>('BAPTISM');
+  const [type, setType] = useState<'BAPTISM' | 'MARRIAGE' | 'CONFIRMATION' | 'DEDICATION' | 'MEMBERSHIP' | 'OTHER'>('BAPTISM');
   const [pastorName, setPastorName] = useState('');
   const [date, setDate] = useState('');
   const [location, setLocation] = useState('');
@@ -83,13 +83,15 @@ export default function SacramentRequestScreen({ onClose }: SacramentRequestScre
       const filename = imageUri.split('/').pop() || 'document.jpg';
 
       const formData = new FormData();
+      let fileType = 'image/jpeg';
       if (Platform.OS === 'web') {
         const response = await fetch(imageUri);
         const blob = await response.blob();
+        fileType = blob.type;
         formData.append('file', blob, filename);
       } else {
         const match = /\.(\w+)$/.exec(filename);
-        const fileType = match ? `image/${match[1]}` : `image/jpeg`;
+        fileType = match ? `image/${match[1]}` : `image/jpeg`;
         formData.append('file', {
           uri: imageUri,
           name: filename,
@@ -157,7 +159,8 @@ export default function SacramentRequestScreen({ onClose }: SacramentRequestScre
     switch (typeCode) {
       case 'BAPTISM': return 'Baptis Kudus';
       case 'MARRIAGE': return 'Pemberkatan Pernikahan';
-      case 'CONFIRMATION': return 'Sidi / Penyerahan Anak';
+      case 'CONFIRMATION': return 'Sidi / Konfirmasi';
+      case 'DEDICATION': return 'Penyerahan Anak';
       case 'MEMBERSHIP': return 'Surat Pindah / Keanggotaan';
       case 'OTHER': return 'Lain-lain';
       default: return typeCode;
@@ -304,14 +307,14 @@ export default function SacramentRequestScreen({ onClose }: SacramentRequestScre
             <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
               <Text style={styles.label}>Jenis Layanan / Sakramen</Text>
               <View style={styles.typeSelectorRow}>
-                {(['BAPTISM', 'MARRIAGE', 'CONFIRMATION', 'MEMBERSHIP', 'OTHER'] as const).map((t) => (
+                {(['BAPTISM', 'MARRIAGE', 'CONFIRMATION', 'DEDICATION', 'MEMBERSHIP', 'OTHER'] as const).map((t) => (
                   <TouchableOpacity
                     key={t}
                     style={[styles.typeTab, type === t && styles.typeTabActive]}
                     onPress={() => setType(t)}
                   >
                     <Text style={[styles.typeTabText, type === t && styles.typeTabTextActive]}>
-                      {t === 'BAPTISM' ? 'Baptis' : t === 'MARRIAGE' ? 'Nikah' : t === 'CONFIRMATION' ? 'Sidi' : t === 'MEMBERSHIP' ? 'Pindah' : 'Lainnya'}
+                      {t === 'BAPTISM' ? 'Baptis' : t === 'MARRIAGE' ? 'Nikah' : t === 'CONFIRMATION' ? 'Sidi' : t === 'DEDICATION' ? 'Penyerahan' : t === 'MEMBERSHIP' ? 'Pindah' : 'Lainnya'}
                     </Text>
                   </TouchableOpacity>
                 ))}

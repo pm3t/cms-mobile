@@ -9,6 +9,7 @@ import PrayerScreen from './PrayerScreen';
 import MinistryScreen from './MinistryScreen';
 import SmallGroupScreen from './SmallGroupScreen';
 import SacramentRequestScreen from './SacramentRequestScreen';
+import GameScreen from './GameScreen';
 
 
 export default function HomeScreen() {
@@ -21,6 +22,7 @@ export default function HomeScreen() {
   const [isMinistryOpen, setIsMinistryOpen] = useState(false);
   const [isSmallGroupOpen, setIsSmallGroupOpen] = useState(false);
   const [isSacramentOpen, setIsSacramentOpen] = useState(false);
+  const [isGameOpen, setIsGameOpen] = useState(false);
 
 
   const fetchEvents = async () => {
@@ -145,6 +147,18 @@ export default function HomeScreen() {
                   <Text style={styles.gridSubtitle}>Pengajuan & Sertifikat</Text>
                 </TouchableOpacity>
               </View>
+
+              <View style={styles.gridRow}>
+                <TouchableOpacity style={[styles.gridItem, styles.bgOrange]} onPress={() => setIsGameOpen(true)}>
+                  <View style={[styles.iconCircle, styles.circleOrange]}>
+                    <Text style={styles.gridIcon}>🎮</Text>
+                  </View>
+                  <Text style={styles.gridTitle}>Game Alkitab</Text>
+                  <Text style={styles.gridSubtitle}>Kuis & Peringkat Harian</Text>
+                </TouchableOpacity>
+
+                <View style={{ flex: 1, backgroundColor: 'transparent' }} />
+              </View>
             </View>
 
             <Text style={styles.header}>Upcoming Events</Text>
@@ -255,6 +269,14 @@ export default function HomeScreen() {
         <SacramentRequestScreen onClose={() => setIsSacramentOpen(false)} />
       </Modal>
 
+      <Modal
+        visible={isGameOpen}
+        animationType="slide"
+        onRequestClose={() => setIsGameOpen(false)}
+      >
+        <GameScreen onClose={() => setIsGameOpen(false)} />
+      </Modal>
+
 
     </View>
   );
@@ -297,6 +319,7 @@ const styles = StyleSheet.create({
   bgIndigo: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' },
   bgRose: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
   bgViolet: { backgroundColor: '#faf5ff', borderColor: '#e9d5ff' },
+  bgOrange: { backgroundColor: '#fff7ed', borderColor: '#ffedd5' },
   
   iconCircle: {
     width: 32,
@@ -312,6 +335,7 @@ const styles = StyleSheet.create({
   circleIndigo: { backgroundColor: '#e0e7ff' },
   circleRose: { backgroundColor: '#ffe4e6' },
   circleViolet: { backgroundColor: '#f3e8ff' },
+  circleOrange: { backgroundColor: '#ffedd5' },
   
   gridIcon: { fontSize: 16 },
   gridTitle: { fontSize: 13, fontWeight: 'bold', color: '#0f172a' },

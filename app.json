@@ -24,7 +24,11 @@
       "package": "com.mirmatheorara1steam.eklesia"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "display": "standalone",
+      "orientation": "portrait",
+      "themeColor": "#4F46E5",
+      "backgroundColor": "#FFFFFF"
     },
     "extra": {
       "eas": {

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert } from 'react-native';
-import { client } from '../api/client';
+import { client, DEFAULT_TENANT_ID, getInitialTenantId } from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [mode, setMode] = useState<'LOGIN' | 'REGISTER' | 'FORGOT' | 'RESET'>('LOGIN');
-  const [tenantId, setTenantId] = useState('gbi-hos');
+  const [tenantId, setTenantId] = useState(() => getInitialTenantId());
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   

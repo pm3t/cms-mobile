@@ -1,6 +1,19 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+export const DEFAULT_TENANT_ID = process.env.EXPO_PUBLIC_DEFAULT_TENANT_ID ?? 'gpdi-vmm';
+
+export function getInitialTenantId(): string {
+  if (typeof window !== 'undefined' && window.location) {
+    const params = new URLSearchParams(window.location.search);
+    const tenantParam = params.get('tenant') || params.get('t');
+    if (tenantParam) {
+      return tenantParam;
+    }
+  }
+  return DEFAULT_TENANT_ID;
+}
+
 // Use EXPO_PUBLIC_ env var for React Native / Expo
 // Set EXPO_PUBLIC_API_URL in your .env / eas.json for production
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.1.12:3000/api/mobile';
@@ -19,7 +32,12 @@ client.interceptors.request.use(async (config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  const tenantId = await AsyncStorage.getItem('mobile_tenant_id') || 'gbi-hos';
+  let tenantId = await AsyncStorage.getItem('mobile_tenant_id');
+  if (!tenantId) {
+    tenantId = getInitialTenantId();
+  }
   config.headers['x-tenant-id'] = tenantId;
   return config;
 });
+
+

@@ -40,6 +40,13 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [rayon, setRayon] = useState('');
+  const [district, setDistrict] = useState('');
+  const [city, setCity] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [locationGetting, setLocationGetting] = useState(false);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [biodataSaving, setBiodataSaving] = useState(false);
 
@@ -69,6 +76,12 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
       setLastName(res.data.lastName || '');
       setPhone(res.data.phone || '');
       setAddress(res.data.address || '');
+      setRayon(res.data.rayon || '');
+      setDistrict(res.data.district || '');
+      setCity(res.data.city || '');
+      setPostalCode(res.data.postalCode || '');
+      setLatitude(res.data.latitude !== null && res.data.latitude !== undefined ? res.data.latitude.toString() : '');
+      setLongitude(res.data.longitude !== null && res.data.longitude !== undefined ? res.data.longitude.toString() : '');
     } catch (err: any) {
       console.log('Error loading profile:', err.message);
     }
@@ -163,6 +176,27 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
   };
 
   // ─── SAVE BIODATA ──────────────────────────────────────────────────────────
+  const handleGetCurrentLocation = () => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      setLocationGetting(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLatitude(position.coords.latitude.toString());
+          setLongitude(position.coords.longitude.toString());
+          setLocationGetting(false);
+          Alert.alert('Sukses', `Koordinat berhasil diambil!\nLat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`);
+        },
+        (error) => {
+          setLocationGetting(false);
+          Alert.alert('Gagal Mengambil Lokasi', error.message || 'Pastikan GPS/lokasi perangkat diaktifkan.');
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      );
+    } else {
+      Alert.alert('Informasi', 'Perangkat tidak mendukung pengambilan lokasi otomatis. Silakan masukkan koordinat secara manual.');
+    }
+  };
+
   const handleSaveBiodata = async () => {
     if (!firstName.trim()) return Alert.alert('Error', 'Nama depan wajib diisi');
 
@@ -172,7 +206,13 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
         firstName: firstName.trim(),
         lastName: lastName.trim() || null,
         phone: phone.trim() || null,
-        address: address.trim() || null
+        address: address.trim() || null,
+        rayon: rayon.trim() || null,
+        district: district.trim() || null,
+        city: city.trim() || null,
+        postalCode: postalCode.trim() || null,
+        latitude: latitude.trim() ? parseFloat(latitude) : null,
+        longitude: longitude.trim() ? parseFloat(longitude) : null,
       });
       setProfile((prev: any) => ({ ...prev, ...res.data }));
       Alert.alert('Sukses', 'Biodata umum berhasil disimpan');
@@ -421,6 +461,54 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
               multiline
               numberOfLines={3}
             />
+
+            <Text style={styles.inputLabel}>Rayon / Sektor Wilayah</Text>
+            <TextInput
+              style={styles.input}
+              value={rayon}
+              onChangeText={setRayon}
+              placeholder="Contoh: Rayon 1 / Sektor Barat"
+            />
+
+            {/* GPS LOCATION SECTION */}
+            <View style={{ marginVertical: 12, padding: 12, backgroundColor: '#f0f9ff', borderRadius: 10, borderWidth: 1, borderColor: '#bae6fd' }}>
+              <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0369a1', marginBottom: 6 }}>📍 Koordinat Peta Peta (GPS)</Text>
+              
+              <TouchableOpacity 
+                style={{ backgroundColor: '#0284c7', padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 10 }}
+                onPress={handleGetCurrentLocation}
+                disabled={locationGetting}
+              >
+                {locationGetting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>📍 Ambil Koordinat GPS Saat Ini</Text>
+                )}
+              </TouchableOpacity>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#334155', marginBottom: 4 }}>Latitude</Text>
+                  <TextInput
+                    style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, fontSize: 12 }}
+                    value={latitude}
+                    onChangeText={setLatitude}
+                    placeholder="-6.2088"
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#334155', marginBottom: 4 }}>Longitude</Text>
+                  <TextInput
+                    style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, fontSize: 12 }}
+                    value={longitude}
+                    onChangeText={setLongitude}
+                    placeholder="106.8456"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+            </View>
 
             <TouchableOpacity 
               style={styles.saveBtn} 

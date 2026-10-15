@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   Alert,
   FlatList,
@@ -11,6 +12,7 @@ import {
   ScrollView,
   Image,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { client, SERVER_BASE_URL } from '../api/client';
@@ -40,7 +42,7 @@ export default function GameScreen({ onClose }: GameScreenProps) {
 
   // Gameplay Inputs
   const [quizSelected, setQuizSelected] = useState<string | null>(null); // For QUIZ
-  const [scrambleSelected, setScrambleSelected] = useState<string[]>([]); // For SCRAMBLE
+  const [scrambleSelectedIndices, setScrambleSelectedIndices] = useState<number[]>([]); // For SCRAMBLE (track index to support duplicate words)
   const [wordSearchSelected, setWordSearchSelected] = useState<string[]>([]); // For WORD_SEARCH
   const [guessInput, setGuessInput] = useState(''); // For GUESS
   const [showHint, setShowHint] = useState(false);
@@ -131,7 +133,7 @@ export default function GameScreen({ onClose }: GameScreenProps) {
       } else {
         setFeedback(null);
         setQuizSelected(null);
-        setScrambleSelected([]);
+        setScrambleSelectedIndices([]);
         setWordSearchSelected([]);
         setGuessInput('');
       }
@@ -148,8 +150,9 @@ export default function GameScreen({ onClose }: GameScreenProps) {
       if (!quizSelected) return Alert.alert('Peringatan', 'Silakan pilih salah satu jawaban');
       answer = quizSelected;
     } else if (activeQ.type === 'SCRAMBLE') {
-      if (scrambleSelected.length === 0) return Alert.alert('Peringatan', 'Silakan susun kata terlebih dahulu');
-      answer = scrambleSelected.join(' ');
+      if (scrambleSelectedIndices.length === 0) return Alert.alert('Peringatan', 'Silakan susun kata terlebih dahulu');
+      const opts = parseOptions(activeQ.options);
+      answer = scrambleSelectedIndices.map((idx) => opts[idx]).join(' ');
     } else if (activeQ.type === 'WORD_SEARCH') {
       if (wordSearchSelected.length === 0) return Alert.alert('Peringatan', 'Silakan pilih kata-kata buah Roh/murid');
       answer = wordSearchSelected.join(', ');
@@ -211,13 +214,24 @@ export default function GameScreen({ onClose }: GameScreenProps) {
     }
   };
 
+  // Safe options parser
+  const parseOptions = (options: any): string[] => {
+    if (!options) return [];
+    if (Array.isArray(options)) return options;
+    if (typeof options === 'string') {
+      try {
+        const parsed = JSON.parse(options);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        return options.split(',').map((s) => s.trim()).filter(Boolean);
+      }
+    }
+    return [];
+  };
+
   // Render question inputs based on type
   const renderQuestionPlay = (q: any) => {
-    // Parse options safely if it is a string representation of a JSON
-    let opts: string[] = [];
-    if (q.options) {
-      opts = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
-    }
+    const opts = parseOptions(q.options);
 
     if (feedback?.submitted) {
       // Feedback UI
@@ -257,45 +271,54 @@ export default function GameScreen({ onClose }: GameScreenProps) {
               {opts.map((opt, i) => {
                 const isSelected = quizSelected === opt;
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={i}
-                    style={[styles.optionButton, isSelected && styles.optionButtonSelected]}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [
+                      styles.optionButton,
+                      isSelected && styles.optionButtonSelected,
+                      pressed && { opacity: 0.8 },
+                    ]}
                     onPress={() => setQuizSelected(opt)}
                   >
-                    <View style={[styles.optionRadio, isSelected && styles.optionRadioSelected]}>
+                    <View style={[styles.optionRadio, isSelected && styles.optionRadioSelected]} pointerEvents="none">
                       {isSelected && <View style={styles.optionRadioInner} />}
                     </View>
                     <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>{opt}</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </View>
           </View>
         );
 
-      case 'SCRAMBLE':
+      case 'SCRAMBLE': {
+        const poolIndices = opts
+          .map((_, idx) => idx)
+          .filter((idx) => !scrambleSelectedIndices.includes(idx));
+
         return (
           <View style={styles.playContent}>
             <Text style={styles.questionText}>{q.question}</Text>
 
             {/* Area Penyusunan */}
             <View style={styles.scrambleDisplay}>
-              {scrambleSelected.length === 0 ? (
+              {scrambleSelectedIndices.length === 0 ? (
                 <Text style={styles.scramblePlaceholder}>Ketuk kata-kata di bawah untuk menyusun ayat...</Text>
               ) : (
                 <View style={styles.scrambleWordsRow}>
-                  {scrambleSelected.map((word, i) => (
-                    <TouchableOpacity
-                      key={i}
+                  {scrambleSelectedIndices.map((optIdx, pos) => (
+                    <Pressable
+                      key={`selected-${pos}`}
+                      accessibilityRole="button"
                       style={styles.scrambleWordItem}
                       onPress={() => {
-                        // Remove word
-                        setScrambleSelected(scrambleSelected.filter((_, idx) => idx !== i));
+                        setScrambleSelectedIndices(scrambleSelectedIndices.filter((_, idx) => idx !== pos));
                       }}
                     >
-                      <Text style={styles.scrambleWordItemText}>{word}</Text>
-                      <Ionicons name="close" size={10} color="#64748b" style={{ marginLeft: 3 }} />
-                    </TouchableOpacity>
+                      <Text style={styles.scrambleWordItemText}>{opts[optIdx]}</Text>
+                      <Ionicons name="close" size={12} color="#64748b" style={{ marginLeft: 3 }} />
+                    </Pressable>
                   ))}
                 </View>
               )}
@@ -303,29 +326,30 @@ export default function GameScreen({ onClose }: GameScreenProps) {
 
             {/* Pilihan Kata Acak */}
             <View style={styles.scramblePool}>
-              {opts
-                .filter((word) => !scrambleSelected.includes(word))
-                .map((word, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={styles.scramblePoolItem}
-                    onPress={() => setScrambleSelected([...scrambleSelected, word])}
-                  >
-                    <Text style={styles.scramblePoolItemText}>{word}</Text>
-                  </TouchableOpacity>
-                ))}
+              {poolIndices.map((optIdx) => (
+                <Pressable
+                  key={`pool-${optIdx}`}
+                  accessibilityRole="button"
+                  style={styles.scramblePoolItem}
+                  onPress={() => setScrambleSelectedIndices([...scrambleSelectedIndices, optIdx])}
+                >
+                  <Text style={styles.scramblePoolItemText}>{opts[optIdx]}</Text>
+                </Pressable>
+              ))}
             </View>
 
-            {scrambleSelected.length > 0 && (
-              <TouchableOpacity
+            {scrambleSelectedIndices.length > 0 && (
+              <Pressable
+                accessibilityRole="button"
                 style={styles.scrambleResetBtn}
-                onPress={() => setScrambleSelected([])}
+                onPress={() => setScrambleSelectedIndices([])}
               >
                 <Text style={styles.scrambleResetBtnText}>Reset Susunan</Text>
-              </TouchableOpacity>
+              </Pressable>
             )}
           </View>
         );
+      }
 
       case 'WORD_SEARCH':
         return (
@@ -337,9 +361,14 @@ export default function GameScreen({ onClose }: GameScreenProps) {
               {opts.map((word, i) => {
                 const isSelected = wordSearchSelected.includes(word);
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={i}
-                    style={[styles.wordSearchBadge, isSelected && styles.wordSearchBadgeSelected]}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [
+                      styles.wordSearchBadge,
+                      isSelected && styles.wordSearchBadgeSelected,
+                      pressed && { opacity: 0.8 },
+                    ]}
                     onPress={() => {
                       if (isSelected) {
                         setWordSearchSelected(wordSearchSelected.filter((w) => w !== word));
@@ -351,7 +380,7 @@ export default function GameScreen({ onClose }: GameScreenProps) {
                     <Text style={[styles.wordSearchText, isSelected && styles.wordSearchTextSelected]}>
                       {word}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </View>
@@ -474,7 +503,11 @@ export default function GameScreen({ onClose }: GameScreenProps) {
             </View>
 
             {/* Active Game Card */}
-            <ScrollView style={styles.gameCardScroll} contentContainerStyle={styles.gameCardContent}>
+            <ScrollView
+              style={styles.gameCardScroll}
+              contentContainerStyle={styles.gameCardContent}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.gameCard}>
                 <View style={styles.gameCardHeader}>
                   <View style={styles.gameTypeBadge}>
@@ -723,6 +756,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     borderRadius: 12,
     backgroundColor: '#fff',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
   },
   optionButtonSelected: { borderColor: '#3b82f6', backgroundColor: '#eff6ff' },
   optionRadio: {
@@ -737,7 +771,12 @@ const styles = StyleSheet.create({
   },
   optionRadioSelected: { borderColor: '#3b82f6' },
   optionRadioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#3b82f6' },
-  optionText: { fontSize: 14, color: '#334155', fontWeight: '500' },
+  optionText: {
+    fontSize: 14,
+    color: '#334155',
+    fontWeight: '500',
+    ...(Platform.OS === 'web' ? { userSelect: 'none' as const, pointerEvents: 'none' as const } : {}),
+  },
   optionTextSelected: { color: '#1e40af', fontWeight: '600' },
 
   // Scramble UI
@@ -762,8 +801,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
   },
-  scrambleWordItemText: { fontSize: 13, fontWeight: '600', color: '#1e293b' },
+  scrambleWordItemText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1e293b',
+    ...(Platform.OS === 'web' ? { userSelect: 'none' as const, pointerEvents: 'none' as const } : {}),
+  },
   scramblePool: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   scramblePoolItem: {
     backgroundColor: '#f1f5f9',
@@ -772,9 +817,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
   },
-  scramblePoolItemText: { fontSize: 13, fontWeight: '500', color: '#475569' },
-  scrambleResetBtn: { alignSelf: 'flex-start', paddingVertical: 4 },
+  scramblePoolItemText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#475569',
+    ...(Platform.OS === 'web' ? { userSelect: 'none' as const, pointerEvents: 'none' as const } : {}),
+  },
+  scrambleResetBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
+  },
   scrambleResetBtnText: { fontSize: 12, color: '#ef4444', fontWeight: '600' },
 
   // Word Search UI
@@ -786,9 +841,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
   },
   wordSearchBadgeSelected: { backgroundColor: '#eff6ff', borderColor: '#3b82f6' },
-  wordSearchText: { fontSize: 13, fontWeight: '600', color: '#475569' },
+  wordSearchText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    ...(Platform.OS === 'web' ? { userSelect: 'none' as const, pointerEvents: 'none' as const } : {}),
+  },
   wordSearchTextSelected: { color: '#2563eb' },
 
   // Guess UI

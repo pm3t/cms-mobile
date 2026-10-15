@@ -10,6 +10,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import MediaScreen from './src/screens/MediaScreen';
 import { client } from './src/api/client';
 import InboxScreen from './src/screens/InboxScreen';
+import { HolyGraceColors, Shadows } from './src/theme/colors';
 
 if (Platform.OS === 'web') {
   Alert.alert = (title, message, buttons) => {
@@ -108,12 +109,29 @@ function MainApp() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Top Sticky Header */}
       <View style={styles.topHeader}>
-        <View>
-          <Text style={styles.headerAppTitle}>CMS Eklesia</Text>
-          <Text style={styles.headerAppSubtitle}>{churchName}</Text>
+        <View style={styles.brandRow}>
+          <View style={styles.logoBadge}>
+            <Ionicons name="sparkles" size={16} color={HolyGraceColors.goldPrimary} />
+          </View>
+          <View style={styles.brandTextContainer}>
+            <View style={styles.titleRow}>
+              <Text style={styles.headerAppTitle}>Eklesia</Text>
+              <View style={styles.mobilePill}>
+                <Text style={styles.mobilePillText}>JEMAAT</Text>
+              </View>
+            </View>
+            <Text style={styles.headerAppSubtitle} numberOfLines={1}>
+              {churchName}
+            </Text>
+          </View>
         </View>
-        <TouchableOpacity style={styles.bellButton} onPress={() => setIsInboxOpen(true)}>
-          <Ionicons name="notifications-outline" size={22} color="#1e293b" />
+
+        <TouchableOpacity
+          style={styles.bellButton}
+          onPress={() => setIsInboxOpen(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="notifications-outline" size={20} color={HolyGraceColors.navyPrimary} />
           {unreadCount > 0 && (
             <View style={styles.badgeContainer}>
               <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -128,22 +146,58 @@ function MainApp() {
         {tab === 'GIVING' && <GivingScreen />}
         {tab === 'PROFILE' && <ProfileScreen onLogout={checkToken} />}
       </View>
-      
-      <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => setTab('HOME')}>
-          <Ionicons name={tab === 'HOME' ? 'home' : 'home-outline'} size={20} color={tab === 'HOME' ? '#3b82f6' : '#64748b'} />
+
+      {/* Floating Modern Tab Bar */}
+      <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        <TouchableOpacity
+          style={[styles.tabItem, tab === 'HOME' && styles.tabItemActive]}
+          onPress={() => setTab('HOME')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={tab === 'HOME' ? 'home' : 'home-outline'}
+            size={20}
+            color={tab === 'HOME' ? HolyGraceColors.navySecondary : HolyGraceColors.textMuted}
+          />
           <Text style={[styles.tabText, tab === 'HOME' && styles.tabActive]}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => setTab('MEDIA')}>
-          <Ionicons name={tab === 'MEDIA' ? 'play-circle' : 'play-circle-outline'} size={20} color={tab === 'MEDIA' ? '#3b82f6' : '#64748b'} />
+
+        <TouchableOpacity
+          style={[styles.tabItem, tab === 'MEDIA' && styles.tabItemActive]}
+          onPress={() => setTab('MEDIA')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={tab === 'MEDIA' ? 'play-circle' : 'play-circle-outline'}
+            size={20}
+            color={tab === 'MEDIA' ? HolyGraceColors.navySecondary : HolyGraceColors.textMuted}
+          />
           <Text style={[styles.tabText, tab === 'MEDIA' && styles.tabActive]}>Media</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => setTab('GIVING')}>
-          <Ionicons name={tab === 'GIVING' ? 'heart' : 'heart-outline'} size={20} color={tab === 'GIVING' ? '#3b82f6' : '#64748b'} />
+
+        <TouchableOpacity
+          style={[styles.tabItem, tab === 'GIVING' && styles.tabItemActive]}
+          onPress={() => setTab('GIVING')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={tab === 'GIVING' ? 'heart' : 'heart-outline'}
+            size={20}
+            color={tab === 'GIVING' ? HolyGraceColors.navySecondary : HolyGraceColors.textMuted}
+          />
           <Text style={[styles.tabText, tab === 'GIVING' && styles.tabActive]}>Giving</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => setTab('PROFILE')}>
-          <Ionicons name={tab === 'PROFILE' ? 'person' : 'person-outline'} size={20} color={tab === 'PROFILE' ? '#3b82f6' : '#64748b'} />
+
+        <TouchableOpacity
+          style={[styles.tabItem, tab === 'PROFILE' && styles.tabItemActive]}
+          onPress={() => setTab('PROFILE')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={tab === 'PROFILE' ? 'person' : 'person-outline'}
+            size={20}
+            color={tab === 'PROFILE' ? HolyGraceColors.navySecondary : HolyGraceColors.textMuted}
+          />
           <Text style={[styles.tabText, tab === 'PROFILE' && styles.tabActive]}>Profile</Text>
         </TouchableOpacity>
       </View>
@@ -156,15 +210,16 @@ function MainApp() {
           fetchUnreadCount();
         }}
       >
-        <InboxScreen onClose={() => {
-          setIsInboxOpen(false);
-          fetchUnreadCount();
-        }} />
+        <InboxScreen
+          onClose={() => {
+            setIsInboxOpen(false);
+            fetchUnreadCount();
+          }}
+        />
       </Modal>
     </SafeAreaView>
   );
 }
-
 
 export default function App() {
   return (
@@ -175,52 +230,94 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: HolyGraceColors.background,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: HolyGraceColors.background,
+  },
   content: { flex: 1 },
   topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    backgroundColor: '#fff',
+    borderBottomColor: HolyGraceColors.borderLight,
+    backgroundColor: HolyGraceColors.surface,
+    ...Shadows.sm,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  logoBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: HolyGraceColors.goldLight,
+    borderWidth: 1,
+    borderColor: HolyGraceColors.goldBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandTextContainer: {
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   headerAppTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
-    color: '#0f172a',
+    color: HolyGraceColors.navyPrimary,
+    letterSpacing: -0.3,
+  },
+  mobilePill: {
+    backgroundColor: HolyGraceColors.blueLight,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  mobilePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: HolyGraceColors.blueAccent,
+    letterSpacing: 0.5,
   },
   headerAppSubtitle: {
     fontSize: 12,
-    color: '#64748b',
+    color: HolyGraceColors.textSecondary,
     fontWeight: '500',
     marginTop: 1,
   },
   bellButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: HolyGraceColors.surface,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: HolyGraceColors.border,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
   },
   badgeContainer: {
     position: 'absolute',
     top: -4,
     right: -4,
-    backgroundColor: '#ef4444',
+    backgroundColor: HolyGraceColors.danger,
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -228,7 +325,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 1.5,
-    borderColor: '#fff',
+    borderColor: HolyGraceColors.surface,
   },
   badgeText: {
     color: '#fff',
@@ -236,20 +333,36 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  tabBar: { 
-    flexDirection: 'row', 
-    backgroundColor: '#fff', 
-    borderTopWidth: 1, 
-    borderColor: '#e2e8f0', 
-    paddingTop: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 8,
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: HolyGraceColors.surface,
+    borderTopWidth: 1,
+    borderColor: HolyGraceColors.borderLight,
+    paddingTop: 8,
+    paddingHorizontal: 12,
+    ...Shadows.md,
   },
-  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabText: { fontSize: 10, color: '#64748b', fontWeight: 'bold', marginTop: 4 },
-  tabActive: { color: '#3b82f6' }
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginHorizontal: 3,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+  },
+  tabItemActive: {
+    backgroundColor: HolyGraceColors.blueLight,
+  },
+  tabText: {
+    fontSize: 11,
+    color: HolyGraceColors.textMuted,
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  tabActive: {
+    color: HolyGraceColors.navySecondary,
+    fontWeight: '700',
+  },
 });
 

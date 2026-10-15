@@ -1,19 +1,30 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  ScrollView,
+  Platform,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { client, DEFAULT_TENANT_ID, getInitialTenantId } from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { HolyGraceColors, Shadows } from '../theme/colors';
 
 export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [mode, setMode] = useState<'LOGIN' | 'REGISTER' | 'FORGOT' | 'RESET'>('LOGIN');
   const [tenantId, setTenantId] = useState(() => getInitialTenantId());
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  
+
   // Register Fields
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
-  
+
   // Reset Fields
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -105,9 +116,9 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
       const res = await client.post('/auth/reset-password', {
         email,
         otp,
-        newPassword
+        newPassword,
       });
-      Alert.alert('Sukses', res.data.message || 'Password berhasil direset!');
+      alert(res.data.message || 'Password berhasil direset!');
       setSuccess('');
       setMode('LOGIN');
       setPassword('');
@@ -128,166 +139,520 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Welcome to Eklesia</Text>
-      
-      {mode === 'LOGIN' && (
-        <Text style={styles.subtitle}>Sign in to access your member portal</Text>
-      )}
-      {mode === 'REGISTER' && (
-        <Text style={styles.subtitle}>Claim your account or register</Text>
-      )}
-      {mode === 'FORGOT' && (
-        <Text style={styles.subtitle}>Masukkan email Anda untuk menerima kode OTP reset password</Text>
-      )}
-      {mode === 'RESET' && (
-        <Text style={styles.subtitle}>Masukkan kode OTP yang dikirim ke email Anda untuk mengubah password</Text>
-      )}
+      {/* Brand Header */}
+      <View style={styles.brandHeader}>
+        <View style={styles.emblemBadge}>
+          <Ionicons name="sparkles" size={26} color={HolyGraceColors.goldPrimary} />
+        </View>
+        <Text style={styles.brandTitle}>Eklesia Jemaat</Text>
+        <Text style={styles.brandSubtitle}>
+          Portal Layanan & Komunitas Iman Jemaat
+        </Text>
+      </View>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {success ? <Text style={styles.success}>{success}</Text> : null}
+      {/* Main Form Box */}
+      <View style={styles.formCard}>
+        {/* Mode Switcher Tabs */}
+        {(mode === 'LOGIN' || mode === 'REGISTER') && (
+          <View style={styles.modeTabs}>
+            <TouchableOpacity
+              style={[styles.modeTab, mode === 'LOGIN' && styles.modeTabActive]}
+              onPress={() => changeMode('LOGIN')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.modeTabText, mode === 'LOGIN' && styles.modeTabTextActive]}>
+                Masuk
+              </Text>
+            </TouchableOpacity>
 
-      {/* Tenant / Church ID is needed for Login, Register, and Forgot Password */}
-      {mode !== 'RESET' && (
-        <TextInput
-          style={styles.input}
-          placeholder="Church ID (e.g. gbi-hos)"
-          value={tenantId}
-          onChangeText={setTenantId}
-          autoCapitalize="none"
-        />
-      )}
+            <TouchableOpacity
+              style={[styles.modeTab, mode === 'REGISTER' && styles.modeTabActive]}
+              onPress={() => changeMode('REGISTER')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.modeTabText, mode === 'REGISTER' && styles.modeTabTextActive]}>
+                Daftar / Klaim
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-      {mode === 'REGISTER' && (
-        <>
-          <TextInput
-            style={styles.input}
-            placeholder="Nama Depan *"
-            value={firstName}
-            onChangeText={setFirstName}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Nama Belakang"
-            value={lastName}
-            onChangeText={setLastName}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Nomor HP"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-          />
-        </>
-      )}
+        {/* Instructions */}
+        {mode === 'FORGOT' && (
+          <View style={styles.instructionBox}>
+            <Ionicons name="mail-outline" size={18} color={HolyGraceColors.navySecondary} />
+            <Text style={styles.instructionText}>
+              Masukkan email terdaftar untuk menerima 6 digit kode OTP reset password.
+            </Text>
+          </View>
+        )}
+        {mode === 'RESET' && (
+          <View style={styles.instructionBox}>
+            <Ionicons name="key-outline" size={18} color={HolyGraceColors.navySecondary} />
+            <Text style={styles.instructionText}>
+              Masukkan kode OTP yang telah dikirim ke email Anda beserta password baru.
+            </Text>
+          </View>
+        )}
 
-      {/* Email input is needed in all modes */}
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        editable={mode !== 'RESET'} // prevent changing email during OTP verification
-      />
-      
-      {/* Password inputs */}
-      {(mode === 'LOGIN' || mode === 'REGISTER') && (
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-      )}
+        {/* Error / Success Alert Banners */}
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle" size={16} color={HolyGraceColors.dangerText} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
-      {mode === 'RESET' && (
-        <>
-          <TextInput
-            style={styles.input}
-            placeholder="Kode OTP (6 Digit)"
-            value={otp}
-            onChangeText={setOtp}
-            keyboardType="number-pad"
-            maxLength={6}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password Baru"
-            value={newPassword}
-            onChangeText={setNewPassword}
-            secureTextEntry
-          />
-        </>
-      )}
+        {success ? (
+          <View style={styles.successBanner}>
+            <Ionicons name="checkmark-circle" size={16} color={HolyGraceColors.successText} />
+            <Text style={styles.successText}>{success}</Text>
+          </View>
+        ) : null}
 
-      {/* Action Buttons */}
-      {mode === 'LOGIN' && (
-        <TouchableOpacity style={styles.button} onPress={handleLoginOrRegister} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Login</Text>}
-        </TouchableOpacity>
-      )}
+        {/* Form Fields */}
+        {mode !== 'RESET' && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Kode Gereja (Church ID)</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="business-outline" size={18} color={HolyGraceColors.textMuted} style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Contoh: gbi-hos"
+                placeholderTextColor={HolyGraceColors.textMuted}
+                value={tenantId}
+                onChangeText={setTenantId}
+                autoCapitalize="none"
+              />
+            </View>
+          </View>
+        )}
 
-      {mode === 'REGISTER' && (
-        <TouchableOpacity style={styles.button} onPress={handleLoginOrRegister} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Klaim / Register</Text>}
-        </TouchableOpacity>
-      )}
+        {mode === 'REGISTER' && (
+          <>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Nama Depan *</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="person-outline" size={18} color={HolyGraceColors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Nama depan Anda"
+                  placeholderTextColor={HolyGraceColors.textMuted}
+                  value={firstName}
+                  onChangeText={setFirstName}
+                />
+              </View>
+            </View>
 
-      {mode === 'FORGOT' && (
-        <TouchableOpacity style={styles.button} onPress={handleForgotPassword} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Kirim Kode OTP</Text>}
-        </TouchableOpacity>
-      )}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Nama Belakang</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="person-outline" size={18} color={HolyGraceColors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Nama belakang / marga"
+                  placeholderTextColor={HolyGraceColors.textMuted}
+                  value={lastName}
+                  onChangeText={setLastName}
+                />
+              </View>
+            </View>
 
-      {mode === 'RESET' && (
-        <TouchableOpacity style={styles.button} onPress={handleResetPassword} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Reset Password</Text>}
-        </TouchableOpacity>
-      )}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Nomor WhatsApp / HP</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="call-outline" size={18} color={HolyGraceColors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="08123456789"
+                  placeholderTextColor={HolyGraceColors.textMuted}
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
+          </>
+        )}
 
-      {/* Forgot Password Link inside Login Mode */}
-      {mode === 'LOGIN' && (
-        <TouchableOpacity style={styles.forgotLink} onPress={() => changeMode('FORGOT')}>
-          <Text style={styles.forgotLinkText}>Lupa Password?</Text>
-        </TouchableOpacity>
-      )}
+        {/* Email Field */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Email Terdaftar</Text>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="mail-outline" size={18} color={HolyGraceColors.textMuted} style={styles.inputIcon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="nama@email.com"
+              placeholderTextColor={HolyGraceColors.textMuted}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              editable={mode !== 'RESET'}
+            />
+          </View>
+        </View>
 
-      {/* Bottom Switch Links */}
-      {mode === 'LOGIN' && (
-        <TouchableOpacity style={styles.toggleLink} onPress={() => changeMode('REGISTER')}>
-          <Text style={styles.toggleLinkText}>Belum punya password? Klaim Akun / Register</Text>
-        </TouchableOpacity>
-      )}
+        {/* Password Fields */}
+        {(mode === 'LOGIN' || mode === 'REGISTER') && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Password</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={18} color={HolyGraceColors.textMuted} style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="••••••••"
+                placeholderTextColor={HolyGraceColors.textMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+            </View>
+          </View>
+        )}
 
-      {mode === 'REGISTER' && (
-        <TouchableOpacity style={styles.toggleLink} onPress={() => changeMode('LOGIN')}>
-          <Text style={styles.toggleLinkText}>Sudah punya akun? Login di sini</Text>
-        </TouchableOpacity>
-      )}
+        {mode === 'RESET' && (
+          <>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Kode OTP (6 Digit)</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="key-outline" size={18} color={HolyGraceColors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Contoh: 123456"
+                  placeholderTextColor={HolyGraceColors.textMuted}
+                  value={otp}
+                  onChangeText={setOtp}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+              </View>
+            </View>
 
-      {(mode === 'FORGOT' || mode === 'RESET') && (
-        <TouchableOpacity style={styles.toggleLink} onPress={() => changeMode('LOGIN')}>
-          <Text style={styles.toggleLinkText}>Kembali ke halaman Login</Text>
-        </TouchableOpacity>
-      )}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Password Baru</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="lock-closed-outline" size={18} color={HolyGraceColors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Minimal 6 karakter"
+                  placeholderTextColor={HolyGraceColors.textMuted}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry
+                />
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* Action Button */}
+        {mode === 'LOGIN' && (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleLoginOrRegister}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <View style={styles.buttonInner}>
+                <Text style={styles.buttonText}>Masuk ke Aplikasi</Text>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {mode === 'REGISTER' && (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleLoginOrRegister}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <View style={styles.buttonInner}>
+                <Text style={styles.buttonText}>Buat Akun Baru</Text>
+                <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {mode === 'FORGOT' && (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleForgotPassword}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <View style={styles.buttonInner}>
+                <Text style={styles.buttonText}>Kirim Kode OTP</Text>
+                <Ionicons name="paper-plane-outline" size={16} color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {mode === 'RESET' && (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleResetPassword}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <View style={styles.buttonInner}>
+                <Text style={styles.buttonText}>Simpan Password Baru</Text>
+                <Ionicons name="save-outline" size={16} color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Links */}
+        {mode === 'LOGIN' && (
+          <TouchableOpacity
+            style={styles.forgotLink}
+            onPress={() => changeMode('FORGOT')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.forgotLinkText}>Lupa password akun Anda?</Text>
+          </TouchableOpacity>
+        )}
+
+        {(mode === 'FORGOT' || mode === 'RESET') && (
+          <TouchableOpacity
+            style={styles.backLink}
+            onPress={() => changeMode('LOGIN')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={14} color={HolyGraceColors.navySecondary} />
+            <Text style={styles.backLinkText}>Kembali ke Halaman Masuk</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, justifyContent: 'center', padding: 24, backgroundColor: '#f8fafc' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1e293b', marginBottom: 8, textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#64748b', marginBottom: 32, textAlign: 'center' },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 16, marginBottom: 16, fontSize: 16 },
-  button: { backgroundColor: '#3b82f6', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  error: { color: '#ef4444', marginBottom: 16, textAlign: 'center', fontWeight: '600' },
-  success: { color: '#22c55e', marginBottom: 16, textAlign: 'center', fontWeight: '600' },
-  forgotLink: { marginTop: 16, alignItems: 'center' },
-  forgotLinkText: { color: '#64748b', fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
-  toggleLink: { marginTop: 20, alignItems: 'center' },
-  toggleLinkText: { color: '#3b82f6', fontSize: 14, fontWeight: '600' }
+  container: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: HolyGraceColors.background,
+  },
+
+  // Brand Header
+  brandHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emblemBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: 20,
+    backgroundColor: HolyGraceColors.goldLight,
+    borderWidth: 1.5,
+    borderColor: HolyGraceColors.goldBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    ...Shadows.sm,
+  },
+  brandTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: HolyGraceColors.navyPrimary,
+    letterSpacing: -0.4,
+  },
+  brandSubtitle: {
+    fontSize: 13,
+    color: HolyGraceColors.textSecondary,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+
+  // Form Card
+  formCard: {
+    backgroundColor: HolyGraceColors.surface,
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: HolyGraceColors.border,
+    ...Shadows.card,
+  },
+
+  // Mode Tabs
+  modeTabs: {
+    flexDirection: 'row',
+    backgroundColor: HolyGraceColors.surfaceSubtle,
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    borderRadius: 10,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+  },
+  modeTabActive: {
+    backgroundColor: HolyGraceColors.surface,
+    ...Shadows.sm,
+  },
+  modeTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: HolyGraceColors.textMuted,
+  },
+  modeTabTextActive: {
+    color: HolyGraceColors.navyPrimary,
+    fontWeight: '800',
+  },
+
+  // Instructions Box
+  instructionBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: HolyGraceColors.blueLight,
+    borderWidth: 1,
+    borderColor: HolyGraceColors.blueBorder,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 18,
+  },
+  instructionText: {
+    fontSize: 12,
+    color: HolyGraceColors.navySecondary,
+    lineHeight: 17,
+    flex: 1,
+  },
+
+  // Alert Banners
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: HolyGraceColors.dangerLight,
+    borderWidth: 1,
+    borderColor: HolyGraceColors.dangerBorder,
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 12,
+    color: HolyGraceColors.dangerText,
+    fontWeight: '600',
+    flex: 1,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: HolyGraceColors.successLight,
+    borderWidth: 1,
+    borderColor: HolyGraceColors.successBorder,
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  successText: {
+    fontSize: 12,
+    color: HolyGraceColors.successText,
+    fontWeight: '600',
+    flex: 1,
+  },
+
+  // Inputs
+  inputGroup: {
+    marginBottom: 14,
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: HolyGraceColors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: HolyGraceColors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: HolyGraceColors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  textInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: HolyGraceColors.textPrimary,
+  },
+
+  // Action Button
+  actionButton: {
+    backgroundColor: HolyGraceColors.navySecondary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    ...Shadows.md,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+  },
+  buttonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+
+  // Links
+  forgotLink: {
+    marginTop: 16,
+    alignItems: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+  },
+  forgotLinkText: {
+    color: HolyGraceColors.navySecondary,
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
+  backLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 18,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+  },
+  backLinkText: {
+    color: HolyGraceColors.navySecondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });

@@ -18,7 +18,9 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import QRCode from 'react-native-qrcode-svg';
+import { Ionicons } from '@expo/vector-icons';
 import { client, SERVER_BASE_URL } from '../api/client';
+import { HolyGraceColors, Shadows } from '../theme/colors';
 
 const SERVER_URL = SERVER_BASE_URL;
 
@@ -375,17 +377,17 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
       {/* AVATAR/PROFILE PIC HEADER */}
       {profile && (
         <View style={styles.avatarCard}>
-          <TouchableOpacity onPress={handleUploadPhoto} disabled={photoLoading}>
+          <TouchableOpacity onPress={handleUploadPhoto} disabled={photoLoading} activeOpacity={0.8}>
             <View style={styles.avatarFrame}>
               {photoLoading ? (
-                <ActivityIndicator size="large" color="#3b82f6" />
+                <ActivityIndicator size="large" color={HolyGraceColors.goldPrimary} />
               ) : profile.photoUrl ? (
                 <Image source={{ uri: `${SERVER_URL}${profile.photoUrl}` }} style={styles.avatarImage} />
               ) : (
                 <Text style={styles.avatarText}>{profile.firstName?.charAt(0).toUpperCase()}</Text>
               )}
               <View style={styles.cameraIconContainer}>
-                <Text style={styles.cameraIcon}>📸</Text>
+                <Ionicons name="camera" size={13} color="#fff" />
               </View>
             </View>
           </TouchableOpacity>
@@ -395,8 +397,10 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
           <TouchableOpacity 
             style={styles.memberCardBtn} 
             onPress={() => setIsCardVisible(true)}
+            activeOpacity={0.8}
           >
-            <Text style={styles.memberCardBtnText}>🪪 Kartu Anggota Digital</Text>
+            <Ionicons name="qr-code-outline" size={15} color="#fff" style={{ marginRight: 6 }} />
+            <Text style={styles.memberCardBtnText}>Kartu Anggota Digital</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -845,7 +849,8 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
       </View>
 
       {/* LOGOUT BUTTON */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
+        <Ionicons name="log-out-outline" size={18} color={HolyGraceColors.danger} style={{ marginRight: 8 }} />
         <Text style={styles.logoutText}>Log Out dari Akun</Text>
       </TouchableOpacity>
 
@@ -861,7 +866,9 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
             {/* Card Header with Logo & Tenant Name */}
             <View style={styles.memberCardHeader}>
               <View style={styles.headerLogoRow}>
-                <Text style={styles.logoEmoji}>⛪</Text>
+                <View style={styles.headerCrestCircle}>
+                  <Ionicons name="sparkles" size={13} color={HolyGraceColors.goldAccent} />
+                </View>
                 <Text style={styles.memberCardTenantName} numberOfLines={1}>
                   {profile?.tenant?.name || 'Eklesia Church'}
                 </Text>
@@ -917,42 +924,40 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, backgroundColor: '#f8fafc', padding: 16 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { fontSize: 24, fontWeight: 'bold', color: '#1e293b', marginBottom: 20, marginTop: 40 },
+  container: { flexGrow: 1, backgroundColor: HolyGraceColors.background, padding: 16 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: HolyGraceColors.background },
+  header: { fontSize: 22, fontWeight: '800', color: HolyGraceColors.navyPrimary, marginBottom: 16, marginTop: 16, letterSpacing: -0.3 },
   
   // Avatar Card Header
   avatarCard: { 
-    backgroundColor: '#fff', 
-    padding: 24, 
-    borderRadius: 24, 
+    backgroundColor: HolyGraceColors.navyDark, 
+    padding: 22, 
+    borderRadius: 22, 
     alignItems: 'center', 
     marginBottom: 20,
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.05, 
-    shadowRadius: 8, 
-    elevation: 3,
     borderWidth: 1,
-    borderColor: '#e2e8f0'
+    borderColor: 'rgba(217, 119, 6, 0.3)',
+    ...Shadows.md,
   },
   avatarFrame: { 
-    width: 90, 
-    height: 90, 
-    borderRadius: 45, 
-    backgroundColor: '#dbeafe', 
+    width: 88, 
+    height: 88, 
+    borderRadius: 44, 
+    backgroundColor: 'rgba(217, 119, 6, 0.15)', 
     justifyContent: 'center', 
     alignItems: 'center', 
     marginBottom: 12,
-    position: 'relative'
+    position: 'relative',
+    borderWidth: 2,
+    borderColor: HolyGraceColors.goldPrimary,
   },
-  avatarImage: { width: 90, height: 90, borderRadius: 45 },
-  avatarText: { fontSize: 36, fontWeight: 'bold', color: '#2563eb' },
+  avatarImage: { width: 84, height: 84, borderRadius: 42 },
+  avatarText: { fontSize: 34, fontWeight: 'bold', color: HolyGraceColors.goldAccent },
   cameraIconContainer: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#2563eb',
+    backgroundColor: HolyGraceColors.navySecondary,
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -962,71 +967,67 @@ const styles = StyleSheet.create({
     borderColor: '#fff'
   },
   cameraIcon: { fontSize: 13, color: '#fff' },
-  profileName: { fontSize: 20, fontWeight: 'bold', color: '#0f172a' },
-  profileEmail: { fontSize: 13, color: '#64748b', marginTop: 2 },
+  profileName: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
+  profileEmail: { fontSize: 13, color: HolyGraceColors.goldAccent, marginTop: 2, fontWeight: '500' },
 
   // Tabs
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#e2e8f0',
+    backgroundColor: HolyGraceColors.surfaceSubtle,
     padding: 4,
-    borderRadius: 14,
-    marginBottom: 16
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: HolyGraceColors.borderLight,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 9,
     alignItems: 'center',
-    borderRadius: 10
+    borderRadius: 9,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
   },
   activeTabButton: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2
+    backgroundColor: HolyGraceColors.surface,
+    ...Shadows.sm,
   },
-  tabButtonText: { fontSize: 10, fontWeight: 'bold', color: '#64748b' },
-  activeTabButtonText: { color: '#0f172a' },
+  tabButtonText: { fontSize: 11, fontWeight: '600', color: HolyGraceColors.textMuted },
+  activeTabButtonText: { color: HolyGraceColors.navyPrimary, fontWeight: '800' },
 
   // Profile Card
   card: { 
-    backgroundColor: '#fff', 
-    borderRadius: 24, 
+    backgroundColor: HolyGraceColors.surface, 
+    borderRadius: 22, 
     padding: 20, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.05, 
-    shadowRadius: 8, 
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 20
+    borderWidth: 1, 
+    borderColor: HolyGraceColors.border,
+    marginBottom: 20,
+    ...Shadows.card,
   },
   tabContent: {
     width: '100%'
   },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b', marginBottom: 16 },
-  inputLabel: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 6, marginTop: 4 },
+  sectionTitle: { fontSize: 17, fontWeight: '800', color: HolyGraceColors.navyPrimary, marginBottom: 16 },
+  inputLabel: { fontSize: 11, fontWeight: '700', color: HolyGraceColors.textSecondary, marginBottom: 6, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
   input: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: HolyGraceColors.surfaceSubtle,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: HolyGraceColors.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 11,
     fontSize: 14,
-    color: '#0f172a',
+    color: HolyGraceColors.textPrimary,
     marginBottom: 14
   },
   textArea: { height: 70, textAlignVertical: 'top' },
   saveBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: HolyGraceColors.navySecondary,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 8
+    marginTop: 8,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
   },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
 
@@ -1169,37 +1170,40 @@ const styles = StyleSheet.create({
 
   logoutBtn: { 
     marginVertical: 16, 
-    padding: 16, 
+    padding: 14, 
     borderRadius: 14, 
     borderWidth: 1, 
-    borderColor: '#ef4444', 
-    alignItems: 'center' 
+    borderColor: HolyGraceColors.dangerBorder,
+    backgroundColor: HolyGraceColors.dangerLight,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
   },
-  logoutText: { color: '#ef4444', fontSize: 15, fontWeight: 'bold' },
+  logoutText: { color: HolyGraceColors.dangerText, fontSize: 14, fontWeight: '700' },
 
   // Digital member card styles
   memberCardBtn: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: HolyGraceColors.navySecondary,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 20,
-    marginTop: 12,
+    marginTop: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3
+    ...Shadows.sm,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
   },
   memberCardBtnText: {
     color: '#ffffff',
-    fontSize: 13,
-    fontWeight: 'bold'
+    fontSize: 12.5,
+    fontWeight: '700'
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20
@@ -1209,21 +1213,19 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     width: '100%',
     maxWidth: 340,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
+    ...Shadows.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#f1f5f9'
+    borderColor: 'rgba(217, 119, 6, 0.3)'
   },
   memberCardHeader: {
-    backgroundColor: '#1e3a8a',
+    backgroundColor: HolyGraceColors.navyDark,
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(217, 119, 6, 0.3)',
   },
   headerLogoRow: {
     flexDirection: 'row',
@@ -1231,17 +1233,22 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8
   },
-  logoEmoji: {
-    fontSize: 18,
-    marginRight: 6
+  headerCrestCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(217, 119, 6, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
   },
   memberCardTenantName: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 'bold'
   },
   memberCardTag: {
-    color: '#93c5fd',
+    color: HolyGraceColors.goldAccent,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 0.5

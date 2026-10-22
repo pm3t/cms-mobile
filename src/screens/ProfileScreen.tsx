@@ -40,12 +40,9 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
 
   // Invite Family Member Modal States
   const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
-  const [inviteSearchQuery, setInviteSearchQuery] = useState('');
-  const [candidateMembers, setCandidateMembers] = useState<any[]>([]);
-  const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
-  const [inviteRole, setInviteRole] = useState('CHILD');
-  const [inviteRelation, setInviteRelation] = useState('Anak');
-  const [searchingCandidates, setSearchingCandidates] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('SPOUSE');
+  const [inviteRelation, setInviteRelation] = useState('Istri');
   const [sendingInvite, setSendingInvite] = useState(false);
 
   // 1. Biodata States
@@ -277,39 +274,26 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const handleSearchCandidates = async (query: string) => {
-    setInviteSearchQuery(query);
-    if (query.trim().length < 2) {
-      setCandidateMembers([]);
-      return;
-    }
-    setSearchingCandidates(true);
-    try {
-      const res = await client.get('/families/search-candidates', { params: { q: query.trim() } });
-      setCandidateMembers(res.data || []);
-    } catch (err: any) {
-      console.log('Error searching members:', err.message);
-    } finally {
-      setSearchingCandidates(false);
-    }
-  };
-
   const handleSendInvitation = async () => {
-    if (!selectedCandidate) {
-      return Alert.alert('Peringatan', 'Pilih jemaat yang ingin diundang');
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email) {
+      return Alert.alert('Peringatan', 'Silakan masukkan email anggota keluarga yang ingin diundang');
+    }
+    if (!email.includes('@') || !email.includes('.')) {
+      return Alert.alert('Peringatan', 'Format email tidak valid');
     }
     setSendingInvite(true);
     try {
       await client.post('/families/invite', {
-        targetMemberId: selectedCandidate.id,
+        email,
         familyRole: inviteRole,
         relation: inviteRelation
       });
-      Alert.alert('Sukses', `Undangan bergabung keluarga berhasil dikirimkan ke ${selectedCandidate.firstName}!`);
+      Alert.alert('Sukses', `Undangan bergabung keluarga berhasil dikirimkan ke email ${email}!`);
       setIsInviteModalVisible(false);
-      setSelectedCandidate(null);
-      setInviteSearchQuery('');
-      setCandidateMembers([]);
+      setInviteEmail('');
+      setInviteRole('SPOUSE');
+      setInviteRelation('Istri');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || err.message);
     } finally {
@@ -640,9 +624,9 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
                   <TouchableOpacity
                     style={styles.inviteBtn}
                     onPress={() => {
-                      setSelectedCandidate(null);
-                      setInviteSearchQuery('');
-                      setCandidateMembers([]);
+                      setInviteEmail('');
+                      setInviteRole('SPOUSE');
+                      setInviteRelation('Istri');
                       setIsInviteModalVisible(true);
                     }}
                     activeOpacity={0.8}
@@ -1063,7 +1047,7 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
             <View style={styles.inviteModalHeader}>
               <View>
                 <Text style={styles.inviteModalTitle}>Undang Anggota Keluarga</Text>
-                <Text style={styles.inviteModalSub}>Cari jemaat yang belum terdaftar di KKJ lain</Text>
+                <Text style={styles.inviteModalSub}>Masukkan email anggota keluarga yang ingin diundang</Text>
               </View>
               <TouchableOpacity 
                 onPress={() => setIsInviteModalVisible(false)}
@@ -1074,95 +1058,46 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
             </View>
 
             <ScrollView style={styles.inviteModalBody} keyboardShouldPersistTaps="handled">
-              {/* Search input */}
-              <Text style={styles.inputLabel}>Cari Nama atau No. HP Jemaat</Text>
-              <View style={styles.searchBarWrapper}>
-                <Ionicons name="search" size={18} color="#94a3b8" style={{ marginRight: 8 }} />
-                <TextInput
-                  style={styles.searchBarInput}
-                  placeholder="Ketik minimal 2 karakter..."
-                  value={inviteSearchQuery}
-                  onChangeText={handleSearchCandidates}
-                  autoCapitalize="none"
-                />
-                {searchingCandidates && <ActivityIndicator size="small" color="#3b82f6" />}
+              <Text style={styles.inputLabel}>Email Anggota Keluarga *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="contoh: anggota@keluarga.com"
+                value={inviteEmail}
+                onChangeText={setInviteEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={{ fontSize: 11, color: '#64748b', marginTop: -8, marginBottom: 16 }}>
+                Pastikan anggota keluarga telah terdaftar di gereja menggunakan email ini.
+              </Text>
+
+              <Text style={styles.inputLabel}>Hubungan dalam Keluarga</Text>
+              <View style={styles.relationGrid}>
+                {[
+                  { role: 'SPOUSE', rel: 'Istri', label: '👰 Istri' },
+                  { role: 'SPOUSE', rel: 'Suami', label: '🤵 Suami' },
+                  { role: 'CHILD', rel: 'Anak', label: '👶 Anak' },
+                  { role: 'PARENT', rel: 'Orang Tua', label: '👴 Orang Tua' },
+                  { role: 'OTHER', rel: 'Lainnya', label: '🤝 Lainnya' },
+                ].map((item) => {
+                  const isActive = inviteRelation === item.rel;
+                  return (
+                    <TouchableOpacity
+                      key={item.rel}
+                      style={[styles.relationBtn, isActive && styles.relationBtnActive]}
+                      onPress={() => {
+                        setInviteRole(item.role);
+                        setInviteRelation(item.rel);
+                      }}
+                    >
+                      <Text style={[styles.relationBtnText, isActive && styles.relationBtnTextActive]}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-
-              {/* Candidate Search Results */}
-              {inviteSearchQuery.trim().length >= 2 && (
-                <View style={{ marginBottom: 16 }}>
-                  {candidateMembers.length === 0 && !searchingCandidates ? (
-                    <Text style={styles.noCandidateText}>
-                      Tidak ditemukan jemaat tanpa keluarga dengan kata kunci "{inviteSearchQuery}".
-                    </Text>
-                  ) : (
-                    <View style={styles.candidateList}>
-                      {candidateMembers.map((candidate) => {
-                        const isSelected = selectedCandidate?.id === candidate.id;
-                        return (
-                          <TouchableOpacity
-                            key={candidate.id}
-                            style={[styles.candidateCard, isSelected && styles.candidateCardActive]}
-                            onPress={() => setSelectedCandidate(candidate)}
-                            activeOpacity={0.7}
-                          >
-                            <View style={[styles.candidateAvatar, isSelected && styles.candidateAvatarActive]}>
-                              <Text style={[styles.candidateAvatarText, isSelected && styles.candidateAvatarTextActive]}>
-                                {candidate.firstName?.charAt(0).toUpperCase()}
-                              </Text>
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.candidateName, isSelected && styles.candidateNameActive]}>
-                                {candidate.firstName} {candidate.lastName || ''}
-                              </Text>
-                              <Text style={styles.candidateSub}>
-                                {candidate.phone || candidate.email || 'Tanpa kontak'}
-                              </Text>
-                            </View>
-                            {isSelected && (
-                              <Ionicons name="checkmark-circle" size={22} color="#2563eb" />
-                            )}
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Relation Options (Only show if a candidate is selected) */}
-              {selectedCandidate && (
-                <View style={styles.relationSection}>
-                  <Text style={styles.inputLabel}>
-                    Pilih Hubungan untuk <Text style={{ color: '#2563eb' }}>{selectedCandidate.firstName}</Text>:
-                  </Text>
-                  <View style={styles.relationGrid}>
-                    {[
-                      { role: 'SPOUSE', rel: 'Istri', label: '👰 Istri' },
-                      { role: 'SPOUSE', rel: 'Suami', label: '🤵 Suami' },
-                      { role: 'CHILD', rel: 'Anak', label: '👶 Anak' },
-                      { role: 'PARENT', rel: 'Orang Tua', label: '👴 Orang Tua' },
-                      { role: 'OTHER', rel: 'Lainnya', label: '🤝 Lainnya' },
-                    ].map((item) => {
-                      const isActive = inviteRelation === item.rel;
-                      return (
-                        <TouchableOpacity
-                          key={item.rel}
-                          style={[styles.relationBtn, isActive && styles.relationBtnActive]}
-                          onPress={() => {
-                            setInviteRole(item.role);
-                            setInviteRelation(item.rel);
-                          }}
-                        >
-                          <Text style={[styles.relationBtnText, isActive && styles.relationBtnTextActive]}>
-                            {item.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
             </ScrollView>
 
             <View style={styles.inviteModalFooter}>
@@ -1176,10 +1111,10 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
               <TouchableOpacity
                 style={[
                   styles.inviteModalSubmitBtn, 
-                  (!selectedCandidate || sendingInvite) && { opacity: 0.5 }
+                  (!inviteEmail.trim() || sendingInvite) && { opacity: 0.5 }
                 ]}
                 onPress={handleSendInvitation}
-                disabled={!selectedCandidate || sendingInvite}
+                disabled={!inviteEmail.trim() || sendingInvite}
               >
                 {sendingInvite ? (
                   <ActivityIndicator size="small" color="#fff" />

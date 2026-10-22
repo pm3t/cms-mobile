@@ -476,7 +476,7 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
 
             {/* GPS LOCATION SECTION */}
             <View style={{ marginVertical: 12, padding: 12, backgroundColor: '#f0f9ff', borderRadius: 10, borderWidth: 1, borderColor: '#bae6fd' }}>
-              <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0369a1', marginBottom: 6 }}>📍 Koordinat Peta Peta (GPS)</Text>
+              <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0369a1', marginBottom: 6 }}>📍 Koordinat Peta (GPS)</Text>
               
               <TouchableOpacity 
                 style={{ backgroundColor: '#0284c7', padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 10 }}

@@ -8,14 +8,16 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  TextInput,
   ScrollView,
   Image,
   Dimensions,
   Platform,
+  Linking,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { client, SERVER_BASE_URL } from '../api/client';
+import { HolyGraceColors, Shadows } from '../theme/colors';
 
 const { width } = Dimensions.get('window');
 
@@ -23,72 +25,67 @@ interface GameScreenProps {
   onClose: () => void;
 }
 
+type TabType = 'WORDLE' | 'TRIVIA' | 'LEADERBOARD';
+
 export default function GameScreen({ onClose }: GameScreenProps) {
-  const [activeTab, setActiveTab] = useState<'PLAY' | 'LEADERBOARD'>('PLAY');
+  const [activeTab, setActiveTab] = useState<TabType>('WORDLE');
   const [loading, setLoading] = useState(true);
 
   // Profile Stats
-  const [profile, setProfile] = useState<any>({
+  const [profile, setProfile] = useState<{
+    totalPoints: number;
+    currentStreak: number;
+    maxStreak: number;
+    rank: string | number;
+  }>({
     totalPoints: 0,
     currentStreak: 0,
     maxStreak: 0,
     rank: '-',
   });
 
-  // Questions & Play State
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
+  // =========================================================================
+  // WORDLE STATES
+  // =========================================================================
+  const [wordleData, setWordleData] = useState<any>(null);
+  const [currentGuess, setCurrentGuess] = useState('');
+  const [submittingWordle, setSubmittingWordle] = useState(false);
 
-  // Gameplay Inputs
-  const [quizSelected, setQuizSelected] = useState<string | null>(null); // For QUIZ
-  const [scrambleSelectedIndices, setScrambleSelectedIndices] = useState<number[]>([]); // For SCRAMBLE (track index to support duplicate words)
-  const [wordSearchSelected, setWordSearchSelected] = useState<string[]>([]); // For WORD_SEARCH
-  const [guessInput, setGuessInput] = useState(''); // For GUESS
-  const [showHint, setShowHint] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    submitted: boolean;
-    isCorrect: boolean;
-    correctAnswer: string;
-    passageReference?: string;
-    pointsEarned: number;
-  } | null>(null);
+  // =========================================================================
+  // TRIVIA STATES
+  // =========================================================================
+  const [triviaQuestions, setTriviaQuestions] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [triviaCurrentIdx, setTriviaCurrentIdx] = useState(0);
+  const [selectedTriviaOption, setSelectedTriviaOption] = useState<string | null>(null);
+  const [submittingTrivia, setSubmittingTrivia] = useState(false);
+  const [triviaFeedback, setTriviaFeedback] = useState<any>(null);
 
-  // Leaderboard State
+  // =========================================================================
+  // LEADERBOARD STATES
+  // =========================================================================
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
-  // Fetch initial profile and today's questions
-  const loadGameData = async () => {
+  // Load all initial data
+  const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [profileRes, questionsRes] = await Promise.all([
+      const [profileRes, wordleRes, triviaRes] = await Promise.all([
         client.get('/game/profile'),
-        client.get('/game/today'),
+        client.get('/game/wordle/today'),
+        client.get('/game/trivia'),
       ]);
       setProfile(profileRes.data);
-      setQuestions(questionsRes.data);
-
-      // Find first unattempted question
-      const firstUnattempted = questionsRes.data.findIndex((q: any) => !q.isAttempted);
-      setCurrentIdx(firstUnattempted !== -1 ? firstUnattempted : 0);
-
-      // Reset feedback if the first question is already attempted
-      if (firstUnattempted === -1 && questionsRes.data.length > 0) {
-        const firstQ = questionsRes.data[0];
-        setFeedback({
-          submitted: true,
-          isCorrect: firstQ.isCorrect,
-          correctAnswer: firstQ.correctAnswer,
-          passageReference: firstQ.passageReference,
-          pointsEarned: firstQ.isCorrect ? firstQ.points : 0,
-        });
-      } else {
-        setFeedback(null);
-      }
+      setWordleData(wordleRes.data);
+      setTriviaQuestions(triviaRes.data || []);
+      
+      // Init trivia index to first unattempted
+      const unattemptedIdx = triviaRes.data.findIndex((q: any) => !q.isAttempted);
+      setTriviaCurrentIdx(unattemptedIdx !== -1 ? unattemptedIdx : 0);
     } catch (err: any) {
       console.log('Error loading game data:', err);
-      Alert.alert('Error', 'Gagal memuat data game');
+      Alert.alert('Error', 'Gagal memuat data game Alkitab');
     } finally {
       setLoading(false);
     }
@@ -107,7 +104,7 @@ export default function GameScreen({ onClose }: GameScreenProps) {
   };
 
   useEffect(() => {
-    loadGameData();
+    loadInitialData();
   }, []);
 
   useEffect(() => {
@@ -116,857 +113,1208 @@ export default function GameScreen({ onClose }: GameScreenProps) {
     }
   }, [activeTab]);
 
-  // Reset inputs when active question index changes
+  // Update feedback when active trivia question changes
   useEffect(() => {
-    if (questions.length > 0 && questions[currentIdx]) {
-      const activeQ = questions[currentIdx];
-      setShowHint(false);
-
-      if (activeQ.isAttempted) {
-        setFeedback({
-          submitted: true,
-          isCorrect: activeQ.isCorrect,
-          correctAnswer: activeQ.correctAnswer,
-          passageReference: activeQ.passageReference,
-          pointsEarned: activeQ.isCorrect ? activeQ.points : 0,
+    if (triviaQuestions.length > 0 && triviaQuestions[triviaCurrentIdx]) {
+      const q = triviaQuestions[triviaCurrentIdx];
+      setSelectedTriviaOption(null);
+      if (q.isAttempted) {
+        setTriviaFeedback({
+          isCorrect: q.isCorrect,
+          correctAnswer: q.correctAnswer,
+          passageReference: q.passageReference,
+          explanation: q.explanation,
         });
       } else {
-        setFeedback(null);
-        setQuizSelected(null);
-        setScrambleSelectedIndices([]);
-        setWordSearchSelected([]);
-        setGuessInput('');
+        setTriviaFeedback(null);
       }
     }
-  }, [currentIdx, questions]);
+  }, [triviaCurrentIdx, triviaQuestions]);
 
-  // Submit Answer
-  const handleSubmitAnswer = async () => {
-    if (questions.length === 0) return;
-    const activeQ = questions[currentIdx];
+  // =========================================================================
+  // WORDLE LOGIC
+  // =========================================================================
+  const handleKeyPress = (letter: string) => {
+    if (!wordleData || wordleData.isGameOver) return;
+    const wordLen = wordleData.wordLength || 5;
 
-    let answer = '';
-    if (activeQ.type === 'QUIZ') {
-      if (!quizSelected) return Alert.alert('Peringatan', 'Silakan pilih salah satu jawaban');
-      answer = quizSelected;
-    } else if (activeQ.type === 'SCRAMBLE') {
-      if (scrambleSelectedIndices.length === 0) return Alert.alert('Peringatan', 'Silakan susun kata terlebih dahulu');
-      const opts = parseOptions(activeQ.options);
-      answer = scrambleSelectedIndices.map((idx) => opts[idx]).join(' ');
-    } else if (activeQ.type === 'WORD_SEARCH') {
-      if (wordSearchSelected.length === 0) return Alert.alert('Peringatan', 'Silakan pilih kata-kata buah Roh/murid');
-      answer = wordSearchSelected.join(', ');
-    } else if (activeQ.type === 'GUESS') {
-      if (!guessInput.trim()) return Alert.alert('Peringatan', 'Silakan ketik tebakan Anda');
-      answer = guessInput.trim();
+    if (letter === 'BACK') {
+      setCurrentGuess((prev) => prev.slice(0, -1));
+    } else if (letter === 'ENTER') {
+      handleSubmitWordle();
+    } else {
+      if (currentGuess.length < wordLen) {
+        setCurrentGuess((prev) => (prev + letter).toUpperCase());
+      }
+    }
+  };
+
+  const handleSubmitWordle = async () => {
+    if (!wordleData || submittingWordle) return;
+    const wordLen = wordleData.wordLength || 5;
+
+    if (currentGuess.length !== wordLen) {
+      return Alert.alert('Kata Kurang', `Tebakan harus terdiri dari ${wordLen} huruf.`);
     }
 
+    setSubmittingWordle(true);
     try {
-      setSubmitting(true);
-      const res = await client.post('/game/submit', {
-        questionId: activeQ.id,
-        answer,
+      const res = await client.post('/game/wordle/guess', {
+        wordleId: wordleData.id,
+        guess: currentGuess,
       });
 
-      const { isCorrect, pointsEarned, correctAnswer, passageReference, totalPoints, currentStreak } = res.data;
-
-      // Update local profile stats
-      setProfile((prev: any) => ({
+      setWordleData((prev: any) => ({
         ...prev,
-        totalPoints,
-        currentStreak,
-        maxStreak: Math.max(prev.maxStreak, currentStreak),
+        guesses: res.data.guesses,
+        evaluatedGuesses: res.data.evaluatedGuesses,
+        isSolved: res.data.isSolved,
+        isGameOver: res.data.isGameOver,
+        word: res.data.word,
+        passageReference: res.data.passageReference,
+        passageText: res.data.passageText,
+        devotionalSnippet: res.data.devotionalSnippet,
+        remainingAttempts: res.data.remainingAttempts,
       }));
 
-      // Update question list local state to show it is now attempted
-      const updatedQuestions = [...questions];
-      updatedQuestions[currentIdx] = {
-        ...activeQ,
-        isAttempted: true,
-        isCorrect,
-        correctAnswer,
-      };
-      setQuestions(updatedQuestions);
+      setCurrentGuess('');
 
-      setFeedback({
-        submitted: true,
+      if (res.data.isSolved) {
+        Alert.alert('Luar Biasa! 🎉', `Jawaban Anda tepat! Anda mendapatkan +${res.data.pointsEarned} Poin.`);
+        // Reload stats
+        const profileRes = await client.get('/game/profile');
+        setProfile(profileRes.data);
+      } else if (res.data.isGameOver) {
+        Alert.alert('Selesai', `Kesempatan menebak hari ini telah habis. Kata hari ini adalah "${res.data.word}".`);
+      }
+    } catch (err: any) {
+      Alert.alert('Peringatan', err.response?.data?.error || err.message);
+    } finally {
+      setSubmittingWordle(false);
+    }
+  };
+
+  const handleShareWordle = async () => {
+    if (!wordleData || !wordleData.evaluatedGuesses) return;
+
+    let gridEmojis = '';
+    wordleData.evaluatedGuesses.forEach((guessRow: any[]) => {
+      guessRow.forEach((cell: any) => {
+        if (cell.status === 'CORRECT') gridEmojis += '🟩';
+        else if (cell.status === 'PRESENT') gridEmojis += '🟨';
+        else gridEmojis += '⬜';
+      });
+      gridEmojis += '\n';
+    });
+
+    const attemptsCount = wordleData.isSolved ? wordleData.guesses.length : 'X';
+    const message = `✨ Wordle Firman (${wordleData.dateStr})\nHasil: ${attemptsCount}/6\n\n${gridEmojis}\nMainkan firman harian di aplikasi gereja kita! 🙏`;
+
+    try {
+      await Share.share({ message });
+    } catch (e) {
+      console.log('Share error:', e);
+    }
+  };
+
+  // Status mapping for on-screen keyboard keys
+  const getKeyStatus = (char: string): 'CORRECT' | 'PRESENT' | 'ABSENT' | 'DEFAULT' => {
+    if (!wordleData?.evaluatedGuesses) return 'DEFAULT';
+
+    let hasPresent = false;
+    let hasAbsent = false;
+
+    for (const row of wordleData.evaluatedGuesses) {
+      for (const cell of row) {
+        if (cell.letter === char) {
+          if (cell.status === 'CORRECT') return 'CORRECT';
+          if (cell.status === 'PRESENT') hasPresent = true;
+          if (cell.status === 'ABSENT') hasAbsent = true;
+        }
+      }
+    }
+
+    if (hasPresent) return 'PRESENT';
+    if (hasAbsent) return 'ABSENT';
+    return 'DEFAULT';
+  };
+
+  // =========================================================================
+  // TRIVIA LOGIC
+  // =========================================================================
+  const filteredTriviaQuestions = triviaQuestions.filter((q) => {
+    if (selectedCategory === 'ALL') return true;
+    return q.category === selectedCategory;
+  });
+
+  const currentTriviaQ = filteredTriviaQuestions[triviaCurrentIdx] || null;
+
+  const handleSubmitTrivia = async (selectedOpt: string) => {
+    if (!currentTriviaQ || submittingTrivia || currentTriviaQ.isAttempted) return;
+
+    setSelectedTriviaOption(selectedOpt);
+    setSubmittingTrivia(true);
+
+    try {
+      const res = await client.post('/game/trivia/submit', {
+        questionId: currentTriviaQ.id,
+        answer: selectedOpt,
+      });
+
+      const { isCorrect, pointsEarned, correctAnswer, passageReference, explanation } = res.data;
+
+      // Update local state
+      const updated = triviaQuestions.map((q) => {
+        if (q.id === currentTriviaQ.id) {
+          return {
+            ...q,
+            isAttempted: true,
+            isCorrect,
+            correctAnswer,
+            passageReference,
+            explanation,
+            userAnswer: selectedOpt,
+          };
+        }
+        return q;
+      });
+      setTriviaQuestions(updated);
+
+      setTriviaFeedback({
         isCorrect,
         correctAnswer,
         passageReference,
-        pointsEarned,
+        explanation,
       });
+
+      // Refresh score
+      const profileRes = await client.get('/game/profile');
+      setProfile(profileRes.data);
     } catch (err: any) {
-      Alert.alert('Gagal', err.response?.data?.error || err.message || 'Gagal mengirimkan jawaban');
+      Alert.alert('Gagal', err.response?.data?.error || err.message);
     } finally {
-      setSubmitting(false);
+      setSubmittingTrivia(false);
     }
   };
 
-  const handleNext = () => {
-    if (currentIdx < questions.length - 1) {
-      setCurrentIdx((prev) => prev + 1);
-    }
-  };
+  // Keyboard Rows for Wordle
+  const KEYBOARD_ROWS = [
+    ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+    ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+    ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'BACK'],
+  ];
 
-  const handlePrev = () => {
-    if (currentIdx > 0) {
-      setCurrentIdx((prev) => prev - 1);
-    }
-  };
-
-  // Safe options parser
-  const parseOptions = (options: any): string[] => {
-    if (!options) return [];
-    if (Array.isArray(options)) return options;
-    if (typeof options === 'string') {
-      try {
-        const parsed = JSON.parse(options);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) {
-        return options.split(',').map((s) => s.trim()).filter(Boolean);
-      }
-    }
-    return [];
-  };
-
-  // Render question inputs based on type
-  const renderQuestionPlay = (q: any) => {
-    const opts = parseOptions(q.options);
-
-    if (feedback?.submitted) {
-      // Feedback UI
-      return (
-        <View style={styles.feedbackContainer}>
-          <View style={[styles.feedbackBadge, feedback.isCorrect ? styles.badgeSuccess : styles.badgeFail]}>
-            <Ionicons
-              name={feedback.isCorrect ? 'checkmark-circle' : 'close-circle'}
-              size={48}
-              color={feedback.isCorrect ? '#10b981' : '#ef4444'}
-            />
-            <Text style={[styles.feedbackBadgeText, feedback.isCorrect ? styles.textSuccess : styles.textFail]}>
-              {feedback.isCorrect ? 'JAWABAN BENAR!' : 'JAWABAN SALAH'}
-            </Text>
-            <Text style={styles.feedbackPoints}>
-              {feedback.isCorrect ? `+${feedback.pointsEarned} Poin` : '+0 Poin'}
-            </Text>
-          </View>
-
-          <View style={styles.correctAnswerBox}>
-            <Text style={styles.correctAnswerLabel}>Jawaban Benar:</Text>
-            <Text style={styles.correctAnswerText}>{feedback.correctAnswer}</Text>
-            {feedback.passageReference && (
-              <Text style={styles.passageRef}>📍 Referensi: {feedback.passageReference}</Text>
-            )}
-          </View>
-        </View>
-      );
-    }
-
-    switch (q.type) {
-      case 'QUIZ':
-        return (
-          <View style={styles.playContent}>
-            <Text style={styles.questionText}>{q.question}</Text>
-            <View style={styles.optionsContainer}>
-              {opts.map((opt, i) => {
-                const isSelected = quizSelected === opt;
-                return (
-                  <Pressable
-                    key={i}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [
-                      styles.optionButton,
-                      isSelected && styles.optionButtonSelected,
-                      pressed && { opacity: 0.8 },
-                    ]}
-                    onPress={() => setQuizSelected(opt)}
-                  >
-                    <View style={[styles.optionRadio, isSelected && styles.optionRadioSelected]} pointerEvents="none">
-                      {isSelected && <View style={styles.optionRadioInner} />}
-                    </View>
-                    <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>{opt}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        );
-
-      case 'SCRAMBLE': {
-        const poolIndices = opts
-          .map((_, idx) => idx)
-          .filter((idx) => !scrambleSelectedIndices.includes(idx));
-
-        return (
-          <View style={styles.playContent}>
-            <Text style={styles.questionText}>{q.question}</Text>
-
-            {/* Area Penyusunan */}
-            <View style={styles.scrambleDisplay}>
-              {scrambleSelectedIndices.length === 0 ? (
-                <Text style={styles.scramblePlaceholder}>Ketuk kata-kata di bawah untuk menyusun ayat...</Text>
-              ) : (
-                <View style={styles.scrambleWordsRow}>
-                  {scrambleSelectedIndices.map((optIdx, pos) => (
-                    <Pressable
-                      key={`selected-${pos}`}
-                      accessibilityRole="button"
-                      style={styles.scrambleWordItem}
-                      onPress={() => {
-                        setScrambleSelectedIndices(scrambleSelectedIndices.filter((_, idx) => idx !== pos));
-                      }}
-                    >
-                      <Text style={styles.scrambleWordItemText}>{opts[optIdx]}</Text>
-                      <Ionicons name="close" size={12} color="#64748b" style={{ marginLeft: 3 }} />
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Pilihan Kata Acak */}
-            <View style={styles.scramblePool}>
-              {poolIndices.map((optIdx) => (
-                <Pressable
-                  key={`pool-${optIdx}`}
-                  accessibilityRole="button"
-                  style={styles.scramblePoolItem}
-                  onPress={() => setScrambleSelectedIndices([...scrambleSelectedIndices, optIdx])}
-                >
-                  <Text style={styles.scramblePoolItemText}>{opts[optIdx]}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {scrambleSelectedIndices.length > 0 && (
-              <Pressable
-                accessibilityRole="button"
-                style={styles.scrambleResetBtn}
-                onPress={() => setScrambleSelectedIndices([])}
-              >
-                <Text style={styles.scrambleResetBtnText}>Reset Susunan</Text>
-              </Pressable>
-            )}
-          </View>
-        );
-      }
-
-      case 'WORD_SEARCH':
-        return (
-          <View style={styles.playContent}>
-            <Text style={styles.questionText}>{q.question}</Text>
-            <Text style={styles.instructionText}>Ketuk untuk memilih/batalkan kata-kata yang termasuk buah Roh / murid:</Text>
-            
-            <View style={styles.wordSearchGrid}>
-              {opts.map((word, i) => {
-                const isSelected = wordSearchSelected.includes(word);
-                return (
-                  <Pressable
-                    key={i}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [
-                      styles.wordSearchBadge,
-                      isSelected && styles.wordSearchBadgeSelected,
-                      pressed && { opacity: 0.8 },
-                    ]}
-                    onPress={() => {
-                      if (isSelected) {
-                        setWordSearchSelected(wordSearchSelected.filter((w) => w !== word));
-                      } else {
-                        setWordSearchSelected([...wordSearchSelected, word]);
-                      }
-                    }}
-                  >
-                    <Text style={[styles.wordSearchText, isSelected && styles.wordSearchTextSelected]}>
-                      {word}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        );
-
-      case 'GUESS':
-        return (
-          <View style={styles.playContent}>
-            <Text style={styles.questionText}>{q.question}</Text>
-            
-            <View style={styles.guessContainer}>
-              <TextInput
-                style={styles.guessInput}
-                placeholder="Ketik jawaban tokoh Alkitab di sini..."
-                value={guessInput}
-                onChangeText={setGuessInput}
-                autoCorrect={false}
-              />
-            </View>
-
-            {q.hint && (
-              <View style={styles.hintContainer}>
-                {showHint ? (
-                  <Text style={styles.hintText}>💡 Petunjuk: {q.hint}</Text>
-                ) : (
-                  <TouchableOpacity onPress={() => setShowHint(true)} style={styles.hintButton}>
-                    <Text style={styles.hintButtonText}>Tampilkan Petunjuk</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </View>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  const getMemberPhotoUri = (photoUrl: string | null) => {
-    if (!photoUrl) return null;
-    if (photoUrl.startsWith('http')) return photoUrl;
-    return `${SERVER_BASE_URL}${photoUrl}`;
-  };
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={{ marginTop: 12, color: '#64748b', fontWeight: '600' }}>
+          Menyiapkan Firman & Game Alkitab...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* HEADER */}
       <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="chevron-back" size={24} color="#1e293b" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Game Alkitab Eklesia</Text>
+        <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
+          <Ionicons name="close" size={24} color="#0f172a" />
+        </TouchableOpacity>
+
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.headerTitle}>Game Alkitab</Text>
+          <Text style={styles.headerSubtitle}>Tumbuh dalam iman & pengetahuan firman</Text>
+        </View>
+
+        {/* Stats Pill */}
+        <View style={styles.statsPill}>
+          <View style={styles.streakBadge}>
+            <Text style={styles.streakText}>🔥 {profile.currentStreak}</Text>
+          </View>
+          <View style={styles.pointsBadge}>
+            <Text style={styles.pointsText}>🌟 {profile.totalPoints} Poin</Text>
+          </View>
         </View>
       </View>
 
-      {/* Profile Card Stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statBox}>
-          <Text style={styles.statLabel}>Skor Total</Text>
-          <Text style={styles.statValue}>🏆 {profile.totalPoints} pts</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statLabel}>Streak Main</Text>
-          <Text style={styles.statValue}>🔥 {profile.currentStreak} hari</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statLabel}>Peringkat</Text>
-          <Text style={styles.statValue}>⭐ Ke-{profile.rank}</Text>
-        </View>
-      </View>
-
-      {/* Tabs */}
+      {/* TOP TABS */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'PLAY' && styles.tabActive]}
-          onPress={() => setActiveTab('PLAY')}
+          style={[styles.tabBtn, activeTab === 'WORDLE' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('WORDLE')}
+          activeOpacity={0.8}
         >
-          <Ionicons name="game-controller-outline" size={16} color={activeTab === 'PLAY' ? '#3b82f6' : '#64748b'} />
-          <Text style={[styles.tabText, activeTab === 'PLAY' && styles.tabTextActive]}>Bermain</Text>
+          <Text style={[styles.tabBtnText, activeTab === 'WORDLE' && styles.tabBtnTextActive]}>
+            🟩 Wordle Firman
+          </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'LEADERBOARD' && styles.tabActive]}
-          onPress={() => setActiveTab('LEADERBOARD')}
+          style={[styles.tabBtn, activeTab === 'TRIVIA' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('TRIVIA')}
+          activeOpacity={0.8}
         >
-          <Ionicons name="trophy-outline" size={16} color={activeTab === 'LEADERBOARD' ? '#3b82f6' : '#64748b'} />
-          <Text style={[styles.tabText, activeTab === 'LEADERBOARD' && styles.tabTextActive]}>Leaderboard</Text>
+          <Text style={[styles.tabBtnText, activeTab === 'TRIVIA' && styles.tabBtnTextActive]}>
+            📖 Tangga Iman
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'LEADERBOARD' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('LEADERBOARD')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tabBtnText, activeTab === 'LEADERBOARD' && styles.tabBtnTextActive]}>
+            🏆 Peringkat
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Content */}
-      {activeTab === 'PLAY' ? (
-        loading ? (
-          <View style={styles.centered}><ActivityIndicator size="large" color="#3b82f6" /></View>
-        ) : questions.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Tidak ada kuis harian aktif saat ini.</Text>
-          </View>
-        ) : (
-          <View style={{ flex: 1 }}>
-            {/* Step Stepper Header */}
-            <View style={styles.stepperContainer}>
-              <Text style={styles.stepperText}>
-                Tantangan {currentIdx + 1} dari {questions.length}
-              </Text>
-              <View style={styles.stepperDots}>
-                {questions.map((q, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.stepperDot,
-                      i === currentIdx && styles.dotActive,
-                      q.isAttempted && (q.isCorrect ? styles.dotCorrect : styles.dotIncorrect),
-                    ]}
-                  />
-                ))}
+      {/* TAB CONTENT */}
+      {activeTab === 'WORDLE' && (
+        <ScrollView contentContainerStyle={styles.tabScrollContent} keyboardShouldPersistTaps="handled">
+          {/* Wordle Header Info */}
+          <View style={styles.wordleInfoBox}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.wordleTitle}>Tebak Kata Firman Hari Ini</Text>
+              <View style={styles.attemptBadge}>
+                <Text style={styles.attemptBadgeText}>
+                  {wordleData?.remainingAttempts} Kesempatan
+                </Text>
               </View>
             </View>
+            {wordleData?.clue && (
+              <Text style={styles.wordleClue}>💡 Petunjuk: {wordleData.clue}</Text>
+            )}
+          </View>
 
-            {/* Active Game Card */}
-            <ScrollView
-              style={styles.gameCardScroll}
-              contentContainerStyle={styles.gameCardContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={styles.gameCard}>
-                <View style={styles.gameCardHeader}>
-                  <View style={styles.gameTypeBadge}>
-                    <Text style={styles.gameTypeBadgeText}>
-                      {questions[currentIdx].type === 'QUIZ' && '📖 Trivia Pilihan Ganda'}
-                      {questions[currentIdx].type === 'SCRAMBLE' && '🧩 Susun Ayat Alkitab'}
-                      {questions[currentIdx].type === 'WORD_SEARCH' && '🔍 Cari Kata Buah/Murid'}
-                      {questions[currentIdx].type === 'GUESS' && '👤 Tebak Tokoh Alkitab'}
+          {/* Wordle Grid (6 Rows) */}
+          <View style={styles.gridContainer}>
+            {Array.from({ length: 6 }).map((_, rowIndex) => {
+              const wordLen = wordleData?.wordLength || 5;
+              const isCurrentRow = rowIndex === (wordleData?.guesses?.length || 0);
+              const evaluatedRow = wordleData?.evaluatedGuesses?.[rowIndex] || null;
+
+              return (
+                <View key={`row-${rowIndex}`} style={styles.gridRow}>
+                  {Array.from({ length: wordLen }).map((_, colIndex) => {
+                    let letter = '';
+                    let status: 'CORRECT' | 'PRESENT' | 'ABSENT' | 'EMPTY' = 'EMPTY';
+
+                    if (evaluatedRow && evaluatedRow[colIndex]) {
+                      letter = evaluatedRow[colIndex].letter;
+                      status = evaluatedRow[colIndex].status;
+                    } else if (isCurrentRow && currentGuess[colIndex]) {
+                      letter = currentGuess[colIndex];
+                    }
+
+                    return (
+                      <View
+                        key={`col-${colIndex}`}
+                        style={[
+                          styles.gridCell,
+                          status === 'CORRECT' && styles.cellCorrect,
+                          status === 'PRESENT' && styles.cellPresent,
+                          status === 'ABSENT' && styles.cellAbsent,
+                          isCurrentRow && letter ? styles.cellActiveTyping : null,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.cellLetter,
+                            (status === 'CORRECT' || status === 'PRESENT' || status === 'ABSENT') &&
+                              styles.cellLetterColored,
+                          ]}
+                        >
+                          {letter}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Game Over Devotional & Scripture Card */}
+          {wordleData?.isGameOver && (
+            <View style={styles.devotionalCard}>
+              <View style={styles.devotionalHeader}>
+                <Ionicons
+                  name={wordleData.isSolved ? 'trophy' : 'book'}
+                  size={24}
+                  color={wordleData.isSolved ? '#f59e0b' : '#3b82f6'}
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.devotionalTitle}>
+                  {wordleData.isSolved ? '🎉 Jawaban Tepat: ' : 'Firman Hari Ini: '}
+                  <Text style={{ color: '#2563eb' }}>{wordleData.word}</Text>
+                </Text>
+              </View>
+
+              <View style={styles.verseBox}>
+                <Text style={styles.verseRef}>📍 {wordleData.passageReference}</Text>
+                <Text style={styles.verseText}>"{wordleData.passageText}"</Text>
+              </View>
+
+              <Text style={styles.devotionalText}>{wordleData.devotionalSnippet}</Text>
+
+              <TouchableOpacity style={styles.shareBtn} onPress={handleShareWordle} activeOpacity={0.8}>
+                <Ionicons name="share-social-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.shareBtnText}>Bagikan Hasil ke WhatsApp</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Virtual Keyboard (Only if game is still active) */}
+          {!wordleData?.isGameOver && (
+            <View style={styles.keyboardContainer}>
+              {KEYBOARD_ROWS.map((row, rIdx) => (
+                <View key={`kb-row-${rIdx}`} style={styles.keyboardRow}>
+                  {row.map((char) => {
+                    const status = getKeyStatus(char);
+                    const isSpecial = char === 'ENTER' || char === 'BACK';
+
+                    return (
+                      <TouchableOpacity
+                        key={char}
+                        style={[
+                          styles.keyBtn,
+                          isSpecial && styles.specialKeyBtn,
+                          status === 'CORRECT' && styles.keyCorrect,
+                          status === 'PRESENT' && styles.keyPresent,
+                          status === 'ABSENT' && styles.keyAbsent,
+                        ]}
+                        onPress={() => handleKeyPress(char)}
+                        activeOpacity={0.7}
+                      >
+                        {char === 'BACK' ? (
+                          <Ionicons name="backspace-outline" size={20} color="#0f172a" />
+                        ) : (
+                          <Text
+                            style={[
+                              styles.keyBtnText,
+                              (status === 'CORRECT' || status === 'PRESENT' || status === 'ABSENT') &&
+                                styles.keyTextColored,
+                            ]}
+                          >
+                            {char === 'ENTER' ? 'KIRIM' : char}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      )}
+
+      {/* TAB 2: TANGGA IMAN (TRIVIA) */}
+      {activeTab === 'TRIVIA' && (
+        <ScrollView contentContainerStyle={styles.tabScrollContent}>
+          {/* Category Pills */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+            {[
+              { id: 'ALL', label: 'Semua Soal' },
+              { id: 'TOKOH', label: '👑 Tokoh Iman' },
+              { id: 'MUKJIZAT', label: '✨ Mukjizat' },
+              { id: 'KISAH_RASUL', label: '🕊️ Kisah Para Rasul' },
+              { id: 'AMSAL', label: '📜 Amsal Hikmat' },
+            ].map((cat) => (
+              <TouchableOpacity
+                key={cat.id}
+                style={[styles.categoryPill, selectedCategory === cat.id && styles.categoryPillActive]}
+                onPress={() => {
+                  setSelectedCategory(cat.id);
+                  setTriviaCurrentIdx(0);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.categoryPillText,
+                    selectedCategory === cat.id && styles.categoryPillTextActive,
+                  ]}
+                >
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {filteredTriviaQuestions.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="book-outline" size={48} color="#94a3b8" />
+              <Text style={styles.emptyTitle}>Belum Ada Pertanyaan</Text>
+              <Text style={styles.emptySubtitle}>Pilih kategori lain untuk melihat soal kuis Alkitab.</Text>
+            </View>
+          ) : currentTriviaQ ? (
+            <View style={styles.triviaCard}>
+              {/* Question Header */}
+              <View style={styles.triviaMetaRow}>
+                <View style={styles.catBadge}>
+                  <Text style={styles.catBadgeText}>
+                    {currentTriviaQ.category || 'UMUM'} • Soal {triviaCurrentIdx + 1} dari{' '}
+                    {filteredTriviaQuestions.length}
+                  </Text>
+                </View>
+                <Text style={styles.pointsEarnedText}>+{currentTriviaQ.points || 15} Poin</Text>
+              </View>
+
+              <Text style={styles.triviaQuestionText}>{currentTriviaQ.question}</Text>
+
+              {/* Options */}
+              <View style={styles.triviaOptionsWrapper}>
+                {(currentTriviaQ.options || []).map((opt: string, idx: number) => {
+                  const isAttempted = currentTriviaQ.isAttempted;
+                  const isCorrectAnswer = opt === currentTriviaQ.correctAnswer;
+                  const isUserSelection = opt === currentTriviaQ.userAnswer || opt === selectedTriviaOption;
+
+                  let icon = 'ellipse-outline';
+                  let iconColor = '#94a3b8';
+
+                  if (isAttempted) {
+                    if (isCorrectAnswer) {
+                      icon = 'checkmark-circle';
+                      iconColor = '#16a34a';
+                    } else if (isUserSelection) {
+                      icon = 'close-circle';
+                      iconColor = '#dc2626';
+                    }
+                  } else if (isUserSelection) {
+                    icon = 'radio-button-on';
+                    iconColor = '#2563eb';
+                  }
+
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[
+                        styles.triviaOptionBtn,
+                        !isAttempted && isUserSelection && styles.triviaOptionSelected,
+                        isAttempted && isCorrectAnswer && styles.triviaOptionCorrect,
+                        isAttempted && isUserSelection && !isCorrectAnswer && styles.triviaOptionWrong,
+                      ]}
+                      disabled={isAttempted || submittingTrivia}
+                      onPress={() => handleSubmitTrivia(opt)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name={icon as any} size={20} color={iconColor} style={{ marginRight: 10 }} />
+                      <Text
+                        style={[
+                          styles.triviaOptionText,
+                          !isAttempted && isUserSelection && { color: '#1d4ed8', fontWeight: '700' as const },
+                          isAttempted && isCorrectAnswer && { color: '#166534', fontWeight: '700' as const },
+                          isAttempted && isUserSelection && !isCorrectAnswer && { color: '#991b1b', fontWeight: '700' as const },
+                        ]}
+                      >
+                        {opt}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Feedback & Explanation Box */}
+              {triviaFeedback && (
+                <View
+                  style={[
+                    styles.explanationBox,
+                    triviaFeedback.isCorrect ? styles.explanationSuccess : styles.explanationFail,
+                  ]}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                    <Ionicons
+                      name={triviaFeedback.isCorrect ? 'checkmark-circle' : 'information-circle'}
+                      size={20}
+                      color={triviaFeedback.isCorrect ? '#16a34a' : '#2563eb'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        styles.explanationTitle,
+                        { color: triviaFeedback.isCorrect ? '#166534' : '#1e3a8a' },
+                      ]}
+                    >
+                      {triviaFeedback.isCorrect ? 'Jawaban Tepat! (+15 Poin)' : 'Pembahasan Firman:'}
                     </Text>
                   </View>
-                  <Text style={styles.gameCardPoints}>+{questions[currentIdx].points} Poin</Text>
-                </View>
 
-                {renderQuestionPlay(questions[currentIdx])}
-              </View>
-            </ScrollView>
-
-            {/* Bottom Play Actions */}
-            <View style={styles.actionRow}>
-              {/* Navigate Prev */}
-              <TouchableOpacity
-                style={[styles.navBtn, currentIdx === 0 && styles.navBtnDisabled]}
-                onPress={handlePrev}
-                disabled={currentIdx === 0}
-              >
-                <Ionicons name="arrow-back" size={20} color={currentIdx === 0 ? '#cbd5e1' : '#475569'} />
-              </TouchableOpacity>
-
-              {/* Submit / Next Button */}
-              {!feedback?.submitted ? (
-                <TouchableOpacity
-                  style={styles.submitBtn}
-                  onPress={handleSubmitAnswer}
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={styles.submitBtnText}>Kirim Jawaban</Text>
+                  {triviaFeedback.passageReference && (
+                    <Text style={styles.explanationRef}>📍 Referensi: {triviaFeedback.passageReference}</Text>
                   )}
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.submitBtn}
-                  onPress={currentIdx === questions.length - 1 ? loadGameData : handleNext}
-                >
-                  <Text style={styles.submitBtnText}>
-                    {currentIdx === questions.length - 1 ? 'Segarkan Game' : 'Pertanyaan Selanjutnya'}
+                  <Text style={styles.explanationText}>
+                    {triviaFeedback.explanation || 'Renungkanlah firman ini setiap hari dalam kehidupan Anda.'}
                   </Text>
-                </TouchableOpacity>
+                </View>
               )}
 
-              {/* Navigate Next */}
-              <TouchableOpacity
-                style={[styles.navBtn, currentIdx === questions.length - 1 && styles.navBtnDisabled]}
-                onPress={handleNext}
-                disabled={currentIdx === questions.length - 1}
-              >
-                <Ionicons name="arrow-forward" size={20} color={currentIdx === questions.length - 1 ? '#cbd5e1' : '#475569'} />
-              </TouchableOpacity>
+              {/* Next & Previous Navigation Buttons */}
+              <View style={styles.navButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.navBtn, triviaCurrentIdx === 0 && { opacity: 0.4 }]}
+                  disabled={triviaCurrentIdx === 0}
+                  onPress={() => setTriviaCurrentIdx((prev) => Math.max(0, prev - 1))}
+                >
+                  <Ionicons name="arrow-back" size={16} color="#475569" style={{ marginRight: 4 }} />
+                  <Text style={styles.navBtnText}>Sebelumnya</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.navBtn,
+                    styles.navBtnPrimary,
+                    triviaCurrentIdx >= filteredTriviaQuestions.length - 1 && { opacity: 0.4 },
+                  ]}
+                  disabled={triviaCurrentIdx >= filteredTriviaQuestions.length - 1}
+                  onPress={() =>
+                    setTriviaCurrentIdx((prev) => Math.min(filteredTriviaQuestions.length - 1, prev + 1))
+                  }
+                >
+                  <Text style={styles.navBtnPrimaryText}>Selanjutnya</Text>
+                  <Ionicons name="arrow-forward" size={16} color="#fff" style={{ marginLeft: 4 }} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+        </ScrollView>
+      )}
+
+      {/* TAB 3: LEADERBOARD */}
+      {activeTab === 'LEADERBOARD' && (
+        <ScrollView contentContainerStyle={styles.tabScrollContent}>
+          {/* User Score Summary Card */}
+          <View style={styles.myRankCard}>
+            <View style={styles.myRankRow}>
+              <View style={styles.myRankCol}>
+                <Text style={styles.myRankLabel}>Peringkat Anda</Text>
+                <Text style={styles.myRankValue}>#{profile.rank}</Text>
+              </View>
+              <View style={styles.dividerCol} />
+              <View style={styles.myRankCol}>
+                <Text style={styles.myRankLabel}>Total Poin</Text>
+                <Text style={styles.myRankValue}>{profile.totalPoints}</Text>
+              </View>
+              <View style={styles.dividerCol} />
+              <View style={styles.myRankCol}>
+                <Text style={styles.myRankLabel}>Streak Api</Text>
+                <Text style={styles.myRankValue}>🔥 {profile.currentStreak} Hari</Text>
+              </View>
             </View>
           </View>
-        )
-      ) : (
-        /* Tab Leaderboard */
-        leaderboardLoading ? (
-          <View style={styles.centered}><ActivityIndicator size="large" color="#3b82f6" /></View>
-        ) : (
-          <FlatList
-            data={leaderboard}
-            keyExtractor={(item) => item.memberId}
-            contentContainerStyle={styles.leaderboardList}
-            renderItem={({ item, index }) => {
-              const isCurrentUser = item.memberId === profile?.memberId; // Local check can be added
-              return (
-                <View style={[styles.leaderboardItem, isCurrentUser && styles.leaderboardItemUser]}>
-                  {/* Rank */}
-                  <View style={styles.rankContainer}>
-                    {index === 0 && <Text style={styles.trophy}>🥇</Text>}
-                    {index === 1 && <Text style={styles.trophy}>🥈</Text>}
-                    {index === 2 && <Text style={styles.trophy}>🥉</Text>}
-                    {index > 2 && <Text style={styles.rankText}>{item.rank}</Text>}
-                  </View>
 
-                  {/* Photo */}
-                  <View style={styles.photoContainer}>
+          {/* Leaderboard List */}
+          <Text style={styles.sectionHeader}>Top Jemaat Minggu Ini</Text>
+
+          {leaderboardLoading ? (
+            <ActivityIndicator size="small" color="#2563eb" style={{ marginTop: 20 }} />
+          ) : leaderboard.length === 0 ? (
+            <Text style={styles.emptyListText}>Belum ada jemaat yang tercatat di papan peringkat.</Text>
+          ) : (
+            leaderboard.map((item, index) => {
+              const isTop3 = index < 3;
+              const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`;
+
+              return (
+                <View key={item.memberId} style={[styles.leaderboardRow, isTop3 && styles.leaderboardTopRow]}>
+                  <Text style={styles.medalText}>{medal}</Text>
+
+                  <View style={styles.memberAvatar}>
                     {item.photoUrl ? (
-                      <Image
-                        source={{ uri: getMemberPhotoUri(item.photoUrl) || '' }}
-                        style={styles.avatar}
-                      />
+                      <Image source={{ uri: `${SERVER_BASE_URL}${item.photoUrl}` }} style={styles.avatarImg} />
                     ) : (
-                      <View style={styles.avatarPlaceholder}>
-                        <Ionicons name="person" size={16} color="#94a3b8" />
-                      </View>
+                      <Text style={styles.avatarInitial}>{item.name?.charAt(0).toUpperCase()}</Text>
                     )}
                   </View>
 
-                  {/* Name and Streak */}
-                  <View style={styles.nameContainer}>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.leaderboardName} numberOfLines={1}>
                       {item.name}
                     </Text>
-                    {item.currentStreak > 0 && (
-                      <Text style={styles.leaderboardStreak}>🔥 {item.currentStreak} hari streak</Text>
-                    )}
+                    <Text style={styles.leaderboardStreak}>🔥 {item.currentStreak} hari aktif</Text>
                   </View>
 
-                  {/* Score */}
-                  <View style={styles.scoreContainer}>
-                    <Text style={styles.leaderboardScore}>{item.totalPoints} pts</Text>
+                  <View style={styles.pointsBadgeItem}>
+                    <Text style={styles.pointsBadgeItemText}>{item.totalPoints} Poin</Text>
                   </View>
                 </View>
               );
-            }}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Papan peringkat masih kosong.</Text>
-              </View>
-            }
-          />
-        )
+            })
+          )}
+        </ScrollView>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#fff',
+  container: {
+    flex: 1,
+    backgroundColor: HolyGraceColors.background,
   },
-  headerTitleRow: { flexDirection: 'row', alignItems: 'center' },
-  closeButton: { padding: 4, marginRight: 8 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#0f172a' },
-  
-  // Stats Row
-  statsContainer: {
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: HolyGraceColors.background,
+    padding: 20,
+  },
+
+  // Header
+  header: {
     flexDirection: 'row',
-    gap: 8,
-    padding: 12,
-    backgroundColor: '#fff',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 48 : 16,
+    paddingBottom: 14,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
   },
-  statBox: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
+  closeBtn: {
+    padding: 6,
+    borderRadius: 8,
     backgroundColor: '#f1f5f9',
-    borderRadius: 12,
-    alignItems: 'center',
   },
-  statLabel: { fontSize: 10, color: '#64748b', fontWeight: '600', textTransform: 'uppercase' },
-  statValue: { fontSize: 13, fontWeight: 'bold', color: '#1e293b', marginTop: 2 },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  statsPill: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  streakBadge: {
+    backgroundColor: '#fff7ed',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  streakText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#c2410c',
+  },
+  pointsBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  pointsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
 
   // Tabs
   tabContainer: {
     flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
-    backgroundColor: '#fff',
+    gap: 8,
   },
-  tabButton: {
+  tabBtn: {
     flex: 1,
-    flexDirection: 'row',
+    paddingVertical: 9,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 6,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabActive: { borderBottomColor: '#3b82f6' },
-  tabText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  tabTextActive: { color: '#3b82f6' },
-
-  // Content Containers
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyText: { color: '#64748b', textAlign: 'center', fontSize: 14 },
-
-  // Stepper UI
-  stepperContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  stepperText: { fontSize: 12, fontWeight: '700', color: '#475569' },
-  stepperDots: { flexDirection: 'row', gap: 6 },
-  stepperDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#cbd5e1' },
-  dotActive: { backgroundColor: '#3b82f6', transform: [{ scale: 1.2 }] },
-  dotCorrect: { backgroundColor: '#10b981' },
-  dotIncorrect: { backgroundColor: '#ef4444' },
-
-  // Card UI
-  gameCardScroll: { flex: 1, marginTop: 12 },
-  gameCardContent: { paddingHorizontal: 16, paddingBottom: 24 },
-  gameCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  gameCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  gameTypeBadge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  gameTypeBadgeText: { fontSize: 11, fontWeight: 'bold', color: '#1d4ed8' },
-  gameCardPoints: { fontSize: 12, fontWeight: '700', color: '#059669' },
-
-  // Gameplay specific UIs
-  playContent: { flex: 1 },
-  questionText: { fontSize: 16, fontWeight: 'bold', color: '#1e293b', lineHeight: 24, marginBottom: 16 },
-  instructionText: { fontSize: 12, color: '#64748b', marginBottom: 12 },
-  optionsContainer: { gap: 10 },
-  optionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
-  },
-  optionButtonSelected: { borderColor: '#3b82f6', backgroundColor: '#eff6ff' },
-  optionRadio: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#cbd5e1',
-    marginRight: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  optionRadioSelected: { borderColor: '#3b82f6' },
-  optionRadioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#3b82f6' },
-  optionText: {
-    fontSize: 14,
-    color: '#334155',
-    fontWeight: '500',
-    ...(Platform.OS === 'web' ? { userSelect: 'none' as const, pointerEvents: 'none' as const } : {}),
-  },
-  optionTextSelected: { color: '#1e40af', fontWeight: '600' },
-
-  // Scramble UI
-  scrambleDisplay: {
-    minHeight: 80,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: '#f8fafc',
-    marginBottom: 16,
-    justifyContent: 'center',
-  },
-  scramblePlaceholder: { fontSize: 13, color: '#94a3b8', textAlign: 'center', fontStyle: 'italic' },
-  scrambleWordsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  scrambleWordItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
-  },
-  scrambleWordItemText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1e293b',
-    ...(Platform.OS === 'web' ? { userSelect: 'none' as const, pointerEvents: 'none' as const } : {}),
-  },
-  scramblePool: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  scramblePoolItem: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
-  },
-  scramblePoolItemText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#475569',
-    ...(Platform.OS === 'web' ? { userSelect: 'none' as const, pointerEvents: 'none' as const } : {}),
-  },
-  scrambleResetBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
-  },
-  scrambleResetBtnText: { fontSize: 12, color: '#ef4444', fontWeight: '600' },
-
-  // Word Search UI
-  wordSearchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  wordSearchBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
     backgroundColor: '#f8fafc',
-    borderRadius: 12,
+  },
+  tabBtnActive: {
+    backgroundColor: '#2563eb',
+  },
+  tabBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  tabBtnTextActive: {
+    color: '#ffffff',
+  },
+
+  tabScrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+
+  // Wordle UI
+  wordleInfoBox: {
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
+    ...Shadows.sm,
   },
-  wordSearchBadgeSelected: { backgroundColor: '#eff6ff', borderColor: '#3b82f6' },
-  wordSearchText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-    ...(Platform.OS === 'web' ? { userSelect: 'none' as const, pointerEvents: 'none' as const } : {}),
-  },
-  wordSearchTextSelected: { color: '#2563eb' },
-
-  // Guess UI
-  guessContainer: { marginBottom: 12 },
-  guessInput: {
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    backgroundColor: '#fff',
+  wordleTitle: {
+    fontSize: 15,
+    fontWeight: '800',
     color: '#0f172a',
   },
-  hintContainer: { marginTop: 8 },
-  hintButton: { alignSelf: 'flex-start' },
-  hintButtonText: { fontSize: 12, color: '#3b82f6', fontWeight: '600' },
-  hintText: { fontSize: 12, color: '#475569', fontStyle: 'italic', backgroundColor: '#fffbeb', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#fef3c7' },
-
-  // Feedback UIs
-  feedbackContainer: { alignItems: 'center', paddingVertical: 10 },
-  feedbackBadge: {
-    alignItems: 'center',
-    gap: 8,
-    padding: 16,
-    borderRadius: 16,
-    width: '100%',
-    marginBottom: 20,
+  attemptBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  badgeSuccess: { backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0' },
-  badgeFail: { backgroundColor: '#fff5f5', borderWidth: 1, borderColor: '#fecdd3' },
-  feedbackBadgeText: { fontSize: 16, fontWeight: '800' },
-  textSuccess: { color: '#065f46' },
-  textFail: { color: '#991b1b' },
-  feedbackPoints: { fontSize: 13, fontWeight: '700', color: '#475569' },
-  
-  correctAnswerBox: {
-    width: '100%',
+  attemptBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  wordleClue: {
+    fontSize: 12.5,
+    color: '#475569',
+    marginTop: 6,
+    lineHeight: 18,
+  },
+
+  gridContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 6,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  gridCell: {
+    width: Math.min((width - 64) / 5, 54),
+    height: Math.min((width - 64) / 5, 54),
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  cellActiveTyping: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
+  },
+  cellCorrect: {
+    backgroundColor: '#10b981',
+    borderColor: '#059669',
+  },
+  cellPresent: {
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706',
+  },
+  cellAbsent: {
+    backgroundColor: '#64748b',
+    borderColor: '#475569',
+  },
+  cellLetter: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  cellLetterColored: {
+    color: '#ffffff',
+  },
+
+  devotionalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#bfdbfe',
+    ...Shadows.md,
+  },
+  devotionalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  devotionalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  verseBox: {
     backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 14,
+    padding: 12,
+    borderRadius: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#2563eb',
+    marginBottom: 10,
+  },
+  verseRef: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#2563eb',
+    marginBottom: 4,
+  },
+  verseText: {
+    fontSize: 13,
+    color: '#334155',
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  devotionalText: {
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+  shareBtn: {
+    backgroundColor: '#25d366',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
+    borderRadius: 10,
+  },
+  shareBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  // On-Screen Keyboard
+  keyboardContainer: {
+    marginTop: 6,
+    gap: 6,
+  },
+  keyboardRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  keyBtn: {
+    flex: 1,
+    maxWidth: 38,
+    height: 44,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  specialKeyBtn: {
+    maxWidth: 58,
+    backgroundColor: '#cbd5e1',
+  },
+  keyCorrect: {
+    backgroundColor: '#10b981',
+  },
+  keyPresent: {
+    backgroundColor: '#f59e0b',
+  },
+  keyAbsent: {
+    backgroundColor: '#64748b',
+  },
+  keyBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  keyTextColored: {
+    color: '#ffffff',
+  },
+
+  // Trivia UI
+  categoryScroll: {
+    marginBottom: 16,
+  },
+  categoryPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    marginRight: 8,
   },
-  correctAnswerLabel: { fontSize: 11, fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 },
-  correctAnswerText: { fontSize: 14, fontWeight: '700', color: '#1e293b' },
-  passageRef: { fontSize: 12, color: '#3b82f6', fontWeight: '600', marginTop: 8 },
+  categoryPillActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  categoryPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  categoryPillTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
 
-  // Play Bottom Actions Row
-  actionRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+  emptyCard: {
     alignItems: 'center',
-    gap: 12,
+    backgroundColor: '#ffffff',
+    padding: 30,
+    borderRadius: 16,
+    marginTop: 20,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#334155',
+    marginTop: 10,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+
+  triviaCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    ...Shadows.md,
+  },
+  triviaMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  catBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  catBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563eb',
+    textTransform: 'uppercase',
+  },
+  pointsEarnedText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#16a34a',
+  },
+  triviaQuestionText: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: '#0f172a',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  triviaOptionsWrapper: {
+    gap: 10,
+    marginBottom: 14,
+  },
+  triviaOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  triviaOptionSelected: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#2563eb',
+  },
+  triviaOptionCorrect: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#16a34a',
+  },
+  triviaOptionWrong: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#ef4444',
+  },
+  triviaOptionText: {
+    fontSize: 13.5,
+    color: '#334155',
+    flex: 1,
+    fontWeight: '500',
+  },
+
+  explanationBox: {
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+  },
+  explanationSuccess: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  explanationFail: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+  },
+  explanationTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  explanationRef: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#2563eb',
+    marginBottom: 4,
+  },
+  explanationText: {
+    fontSize: 12.5,
+    color: '#475569',
+    lineHeight: 18,
+  },
+
+  navButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
   },
   navBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-  },
-  navBtnDisabled: { backgroundColor: '#f1f5f9', borderColor: '#f1f5f9' },
-  submitBtn: {
-    flex: 1,
-    height: 44,
-    backgroundColor: '#3b82f6',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  submitBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-
-  // Leaderboard UI List
-  leaderboardList: { padding: 16 },
-  leaderboardItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+  },
+  navBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  navBtnPrimary: {
+    backgroundColor: '#2563eb',
+  },
+  navBtnPrimaryText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+
+  // Leaderboard UI
+  myRankCard: {
+    backgroundColor: '#1e3a8a',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 20,
+    ...Shadows.md,
+  },
+  myRankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  myRankCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dividerCol: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  myRankLabel: {
+    fontSize: 11,
+    color: '#93c5fd',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  myRankValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#ffffff',
+  },
+
+  sectionHeader: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 12,
+  },
+  leaderboardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
     padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 12,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  leaderboardItemUser: {
-    borderColor: '#bfdbfe',
+  leaderboardTopRow: {
+    borderColor: '#fde68a',
+    backgroundColor: '#fffbeb',
+  },
+  medalText: {
+    fontSize: 18,
+    fontWeight: '900',
+    width: 32,
+    textAlign: 'center',
+  },
+  memberAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#eff6ff',
-  },
-  rankContainer: { width: 32, alignItems: 'center' },
-  trophy: { fontSize: 20 },
-  rankText: { fontSize: 14, fontWeight: 'bold', color: '#64748b' },
-  photoContainer: { marginLeft: 6 },
-  avatar: { width: 36, height: 36, borderRadius: 18 },
-  avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#e2e8f0',
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
   },
-  nameContainer: { flex: 1, marginLeft: 12 },
-  leaderboardName: { fontSize: 14, fontWeight: 'bold', color: '#1e293b' },
-  leaderboardStreak: { fontSize: 10, color: '#f59e0b', fontWeight: '600', marginTop: 1 },
-  scoreContainer: { alignItems: 'flex-end', marginLeft: 8 },
-  leaderboardScore: { fontSize: 14, fontWeight: '800', color: '#3b82f6' },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarInitial: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#2563eb',
+  },
+  leaderboardName: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  leaderboardStreak: {
+    fontSize: 11,
+    color: '#ea580c',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  pointsBadgeItem: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  pointsBadgeItemText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1d4ed8',
+  },
+  emptyListText: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 20,
+  },
 });

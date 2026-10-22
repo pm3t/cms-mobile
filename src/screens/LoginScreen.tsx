@@ -62,6 +62,9 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
           phone: phone || undefined,
         });
         await AsyncStorage.setItem('mobile_token', res.data.token);
+        if (res.data.isClaimed) {
+          alert('Selamat datang! Akun Anda berhasil terhubung langsung dengan data keanggotaan gereja.');
+        }
         onLogin();
       } else {
         const res = await client.post('/auth/login', { email, password });
@@ -186,6 +189,14 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
             </Text>
           </View>
         )}
+        {mode === 'REGISTER' && (
+          <View style={styles.instructionBox}>
+            <Ionicons name="sparkles" size={18} color={HolyGraceColors.goldPrimary} />
+            <Text style={styles.instructionText}>
+              Sudah terdata di gereja? Masukkan No. HP atau Email yang didaftarkan di gereja agar profil keanggotaan Anda otomatis terhubung tanpa membuat data ganda.
+            </Text>
+          </View>
+        )}
         {mode === 'RESET' && (
           <View style={styles.instructionBox}>
             <Ionicons name="key-outline" size={18} color={HolyGraceColors.navySecondary} />
@@ -275,19 +286,26 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
           </>
         )}
 
-        {/* Email Field */}
+        {/* Email or Phone Field */}
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Email Terdaftar</Text>
+          <Text style={styles.inputLabel}>
+            {mode === 'LOGIN' ? 'Email atau No. Handphone' : 'Alamat Email Terdaftar *'}
+          </Text>
           <View style={styles.inputWrapper}>
-            <Ionicons name="mail-outline" size={18} color={HolyGraceColors.textMuted} style={styles.inputIcon} />
+            <Ionicons
+              name={mode === 'LOGIN' ? 'person-circle-outline' : 'mail-outline'}
+              size={18}
+              color={HolyGraceColors.textMuted}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={styles.textInput}
-              placeholder="nama@email.com"
+              placeholder={mode === 'LOGIN' ? 'nama@email.com atau 0812...' : 'nama@email.com'}
               placeholderTextColor={HolyGraceColors.textMuted}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
-              keyboardType="email-address"
+              keyboardType={mode === 'LOGIN' ? 'default' : 'email-address'}
               editable={mode !== 'RESET'}
             />
           </View>

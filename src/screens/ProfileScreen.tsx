@@ -34,8 +34,19 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
   const [isCardVisible, setIsCardVisible] = useState(false);
 
   // General Lists (fetched from backend)
-  const [allFamilies, setAllFamilies] = useState<any[]>([]);
   const [allSkills, setAllSkills] = useState<any[]>([]);
+  const [familyInvitations, setFamilyInvitations] = useState<any[]>([]);
+  const [invitationLoading, setInvitationLoading] = useState(false);
+
+  // Invite Family Member Modal States
+  const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
+  const [inviteSearchQuery, setInviteSearchQuery] = useState('');
+  const [candidateMembers, setCandidateMembers] = useState<any[]>([]);
+  const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
+  const [inviteRole, setInviteRole] = useState('CHILD');
+  const [inviteRelation, setInviteRelation] = useState('Anak');
+  const [searchingCandidates, setSearchingCandidates] = useState(false);
+  const [sendingInvite, setSendingInvite] = useState(false);
 
   // 1. Biodata States
   const [firstName, setFirstName] = useState('');
@@ -89,14 +100,21 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const fetchFamiliesAndSkills = async () => {
+  const fetchFamilyInvitations = async () => {
     try {
-      const famRes = await client.get('/families');
-      setAllFamilies(famRes.data);
-      const skillRes = await client.get('/skills');
-      setAllSkills(skillRes.data);
+      const res = await client.get('/families/invitations');
+      setFamilyInvitations(res.data || []);
     } catch (err: any) {
-      console.log('Error loading lists:', err.message);
+      console.log('Error loading family invitations:', err.message);
+    }
+  };
+
+  const fetchSkills = async () => {
+    try {
+      const skillRes = await client.get('/skills');
+      setAllSkills(skillRes.data || []);
+    } catch (err: any) {
+      console.log('Error loading skills list:', err.message);
     }
   };
 
@@ -111,13 +129,13 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
 
   const loadAll = async () => {
     setLoading(true);
-    await Promise.all([fetchProfile(), fetchFamiliesAndSkills(), fetchCertificates()]);
+    await Promise.all([fetchProfile(), fetchFamilyInvitations(), fetchSkills(), fetchCertificates()]);
     setLoading(false);
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchProfile(), fetchFamiliesAndSkills(), fetchCertificates()]);
+    await Promise.all([fetchProfile(), fetchFamilyInvitations(), fetchSkills(), fetchCertificates()]);
     setRefreshing(false);
   };
 
@@ -231,10 +249,10 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
     setFamilyLoading(true);
     try {
       await client.post('/families', { name: newFamilyName.trim() });
-      Alert.alert('Sukses', `Keluarga "${newFamilyName}" berhasil dibuat!`);
+      Alert.alert('Sukses', `Keluarga "${newFamilyName}" berhasil dibuat! Anda sekarang adalah Kepala Keluarga.`);
       setNewFamilyName('');
       await fetchProfile();
-      await fetchFamiliesAndSkills();
+      await fetchFamilyInvitations();
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || err.message);
     } finally {
@@ -242,16 +260,60 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const handleJoinFamily = async (familyId: string) => {
-    setFamilyLoading(true);
+  const handleRespondInvitation = async (invitationId: string, action: 'ACCEPT' | 'REJECT') => {
+    setInvitationLoading(true);
     try {
-      await client.post('/families/join', { familyId });
-      Alert.alert('Sukses', 'Berhasil bergabung dengan keluarga');
+      await client.post(`/families/invitations/${invitationId}/respond`, { action });
+      Alert.alert(
+        action === 'ACCEPT' ? 'Selamat!' : 'Informasi',
+        action === 'ACCEPT' ? 'Anda telah resmi bergabung ke dalam keluarga!' : 'Undangan berhasil ditolak.'
+      );
       await fetchProfile();
+      await fetchFamilyInvitations();
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || err.message);
     } finally {
-      setFamilyLoading(false);
+      setInvitationLoading(false);
+    }
+  };
+
+  const handleSearchCandidates = async (query: string) => {
+    setInviteSearchQuery(query);
+    if (query.trim().length < 2) {
+      setCandidateMembers([]);
+      return;
+    }
+    setSearchingCandidates(true);
+    try {
+      const res = await client.get('/families/search-candidates', { params: { q: query.trim() } });
+      setCandidateMembers(res.data || []);
+    } catch (err: any) {
+      console.log('Error searching members:', err.message);
+    } finally {
+      setSearchingCandidates(false);
+    }
+  };
+
+  const handleSendInvitation = async () => {
+    if (!selectedCandidate) {
+      return Alert.alert('Peringatan', 'Pilih jemaat yang ingin diundang');
+    }
+    setSendingInvite(true);
+    try {
+      await client.post('/families/invite', {
+        targetMemberId: selectedCandidate.id,
+        familyRole: inviteRole,
+        relation: inviteRelation
+      });
+      Alert.alert('Sukses', `Undangan bergabung keluarga berhasil dikirimkan ke ${selectedCandidate.firstName}!`);
+      setIsInviteModalVisible(false);
+      setSelectedCandidate(null);
+      setInviteSearchQuery('');
+      setCandidateMembers([]);
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || err.message);
+    } finally {
+      setSendingInvite(false);
     }
   };
 
@@ -270,6 +332,7 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
               await client.post('/families/leave');
               Alert.alert('Sukses', 'Berhasil keluar dari keluarga');
               await fetchProfile();
+              await fetchFamilyInvitations();
             } catch (err: any) {
               Alert.alert('Error', err.response?.data?.error || err.message);
             } finally {
@@ -342,7 +405,7 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
       }
       Alert.alert('Sukses', 'Keahlian/Bakat berhasil ditambahkan');
       await fetchProfile();
-      await fetchFamiliesAndSkills();
+      await fetchSkills();
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || err.message);
     } finally {
@@ -535,19 +598,59 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
 
             {profile?.family ? (
               <View style={styles.familyInfoCard}>
-                <Text style={styles.familyHeaderName}>🏡 {profile.family.name}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.familyHeaderName}>🏡 {profile.family.name}</Text>
+                  {profile.family.kkjNumber ? (
+                    <View style={styles.kkjBadge}>
+                      <Text style={styles.kkjBadgeText}>KKJ: {profile.family.kkjNumber}</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.kkjBadge, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
+                      <Text style={[styles.kkjBadgeText, { color: '#b45309' }]}>Menunggu KKJ</Text>
+                    </View>
+                  )}
+                </View>
+
                 <Text style={styles.familySub}>Anggota Keluarga:</Text>
                 
-                {profile.family.members?.map((m: any) => (
-                  <View key={m.id} style={styles.familyMemberRow}>
-                    <Text style={styles.familyMemberBullet}>•</Text>
-                    <Text style={styles.familyMemberName}>
-                      {m.firstName} {m.lastName || ''} 
-                      {m.id === profile.id ? ' (Anda)' : ''}
-                      {m.id === profile.family.headOfFamilyId ? ' 👑 Kepala' : ''}
-                    </Text>
-                  </View>
-                ))}
+                {profile.family.members?.map((m: any) => {
+                  const isMe = m.id === profile.id;
+                  const isHead = m.id === profile.family.headOfFamilyId || m.familyRole === 'HEAD';
+                  return (
+                    <View key={m.id} style={styles.familyMemberRowNew}>
+                      <View style={styles.familyMemberAvatar}>
+                        <Text style={styles.familyMemberAvatarText}>
+                          {m.firstName?.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={styles.familyMemberNameNew}>
+                          {m.firstName} {m.lastName || ''} {isMe ? '(Anda)' : ''}
+                        </Text>
+                        <Text style={styles.familyMemberRoleNew}>
+                          {isHead ? '👑 Kepala Keluarga' : (m.familyRelation || m.familyRole || 'Anggota')}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {/* Only Head of family can invite new members */}
+                {(profile.id === profile.family.headOfFamilyId || profile.familyRole === 'HEAD') && (
+                  <TouchableOpacity
+                    style={styles.inviteBtn}
+                    onPress={() => {
+                      setSelectedCandidate(null);
+                      setInviteSearchQuery('');
+                      setCandidateMembers([]);
+                      setIsInviteModalVisible(true);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="person-add-outline" size={16} color="#2563eb" style={{ marginRight: 6 }} />
+                    <Text style={styles.inviteBtnText}>Undang Anggota Keluarga</Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity 
                   style={styles.leaveFamilyBtn} 
@@ -559,36 +662,64 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
               </View>
             ) : (
               <View>
-                <Text style={styles.emptyText}>Anda belum terdaftar dalam grup keluarga di gereja ini.</Text>
-                
-                {/* Join Existing Family */}
-                {allFamilies.length > 0 && (
-                  <View style={styles.subSection}>
-                    <Text style={styles.subTitle}>Gabung Keluarga Terdaftar:</Text>
-                    <ScrollView style={styles.familiesList} nestedScrollEnabled>
-                      {allFamilies.map((fam) => (
-                        <TouchableOpacity
-                          key={fam.id}
-                          style={styles.familySelectItem}
-                          onPress={() => handleJoinFamily(fam.id)}
-                          disabled={familyLoading}
-                        >
-                          <Text style={styles.familySelectText}>🏡 {fam.name}</Text>
-                          <Text style={styles.joinText}>Gabung</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
+                {/* 1. Show Incoming Invitations if any */}
+                {familyInvitations.length > 0 && (
+                  <View style={{ marginBottom: 18 }}>
+                    <Text style={[styles.subTitle, { color: '#1e40af' }]}>
+                      📩 Undangan Bergabung Keluarga ({familyInvitations.length})
+                    </Text>
+                    {familyInvitations.map((inv) => (
+                      <View key={inv.id} style={styles.invitationCard}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                          <Ionicons name="mail-unread-outline" size={20} color="#3b82f6" style={{ marginRight: 8 }} />
+                          <Text style={styles.invitationFamilyName}>🏡 {inv.family?.name}</Text>
+                        </View>
+                        <Text style={styles.invitationDetail}>
+                          Anda diundang bergabung sebagai <Text style={{ fontWeight: 'bold' }}>{inv.relation || inv.familyRole || 'Anggota'}</Text> oleh {inv.inviter?.firstName} {inv.inviter?.lastName}.
+                        </Text>
+                        <View style={styles.invitationActions}>
+                          <TouchableOpacity
+                            style={[styles.invitationBtn, styles.acceptBtn]}
+                            onPress={() => handleRespondInvitation(inv.id, 'ACCEPT')}
+                            disabled={invitationLoading}
+                          >
+                            <Ionicons name="checkmark-circle-outline" size={16} color="#fff" style={{ marginRight: 4 }} />
+                            <Text style={styles.acceptBtnText}>Terima</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.invitationBtn, styles.rejectBtn]}
+                            onPress={() => handleRespondInvitation(inv.id, 'REJECT')}
+                            disabled={invitationLoading}
+                          >
+                            <Ionicons name="close-circle-outline" size={16} color="#64748b" style={{ marginRight: 4 }} />
+                            <Text style={styles.rejectBtnText}>Tolak</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
                   </View>
                 )}
 
-                {/* Create New Family */}
+                {/* 2. Empty state prompt */}
+                <View style={styles.noFamilyBox}>
+                  <Ionicons name="home-outline" size={44} color="#94a3b8" style={{ marginBottom: 8 }} />
+                  <Text style={styles.noFamilyTitle}>Belum Terdaftar di Keluarga</Text>
+                  <Text style={styles.noFamilyDesc}>
+                    Akun Anda belum terdaftar dalam Kartu Keluarga Jemaat (KKJ). Anda bisa menunggu didaftarkan oleh admin gereja, menerima undangan keluarga, atau membuat keluarga baru di bawah ini.
+                  </Text>
+                </View>
+
+                {/* 3. Create New Family */}
                 <View style={styles.subSection}>
                   <Text style={styles.subTitle}>Buat Keluarga Baru:</Text>
+                  <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                    Anda akan menjadi Kepala Keluarga dan dapat mengundang anggota keluarga lainnya.
+                  </Text>
                   <TextInput
                     style={styles.input}
                     value={newFamilyName}
                     onChangeText={setNewFamilyName}
-                    placeholder="Nama Keluarga (Contoh: Keluarga Panjaitan)"
+                    placeholder="Contoh: Keluarga Handoko"
                   />
                   <TouchableOpacity 
                     style={styles.actionBtn}
@@ -598,7 +729,7 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
                     {familyLoading ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <Text style={styles.actionBtnText}>Buat & Gabung</Text>
+                      <Text style={styles.actionBtnText}>Buat Keluarga</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -919,6 +1050,147 @@ export default function ProfileScreen({ onLogout }: { onLogout: () => void }) {
           </View>
         </View>
       </Modal>
+
+      {/* INVITE FAMILY MEMBER MODAL */}
+      <Modal
+        visible={isInviteModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsInviteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.inviteModalContainer}>
+            <View style={styles.inviteModalHeader}>
+              <View>
+                <Text style={styles.inviteModalTitle}>Undang Anggota Keluarga</Text>
+                <Text style={styles.inviteModalSub}>Cari jemaat yang belum terdaftar di KKJ lain</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setIsInviteModalVisible(false)}
+                style={styles.inviteCloseBtn}
+              >
+                <Ionicons name="close" size={22} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.inviteModalBody} keyboardShouldPersistTaps="handled">
+              {/* Search input */}
+              <Text style={styles.inputLabel}>Cari Nama atau No. HP Jemaat</Text>
+              <View style={styles.searchBarWrapper}>
+                <Ionicons name="search" size={18} color="#94a3b8" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.searchBarInput}
+                  placeholder="Ketik minimal 2 karakter..."
+                  value={inviteSearchQuery}
+                  onChangeText={handleSearchCandidates}
+                  autoCapitalize="none"
+                />
+                {searchingCandidates && <ActivityIndicator size="small" color="#3b82f6" />}
+              </View>
+
+              {/* Candidate Search Results */}
+              {inviteSearchQuery.trim().length >= 2 && (
+                <View style={{ marginBottom: 16 }}>
+                  {candidateMembers.length === 0 && !searchingCandidates ? (
+                    <Text style={styles.noCandidateText}>
+                      Tidak ditemukan jemaat tanpa keluarga dengan kata kunci "{inviteSearchQuery}".
+                    </Text>
+                  ) : (
+                    <View style={styles.candidateList}>
+                      {candidateMembers.map((candidate) => {
+                        const isSelected = selectedCandidate?.id === candidate.id;
+                        return (
+                          <TouchableOpacity
+                            key={candidate.id}
+                            style={[styles.candidateCard, isSelected && styles.candidateCardActive]}
+                            onPress={() => setSelectedCandidate(candidate)}
+                            activeOpacity={0.7}
+                          >
+                            <View style={[styles.candidateAvatar, isSelected && styles.candidateAvatarActive]}>
+                              <Text style={[styles.candidateAvatarText, isSelected && styles.candidateAvatarTextActive]}>
+                                {candidate.firstName?.charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.candidateName, isSelected && styles.candidateNameActive]}>
+                                {candidate.firstName} {candidate.lastName || ''}
+                              </Text>
+                              <Text style={styles.candidateSub}>
+                                {candidate.phone || candidate.email || 'Tanpa kontak'}
+                              </Text>
+                            </View>
+                            {isSelected && (
+                              <Ionicons name="checkmark-circle" size={22} color="#2563eb" />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Relation Options (Only show if a candidate is selected) */}
+              {selectedCandidate && (
+                <View style={styles.relationSection}>
+                  <Text style={styles.inputLabel}>
+                    Pilih Hubungan untuk <Text style={{ color: '#2563eb' }}>{selectedCandidate.firstName}</Text>:
+                  </Text>
+                  <View style={styles.relationGrid}>
+                    {[
+                      { role: 'SPOUSE', rel: 'Istri', label: '👰 Istri' },
+                      { role: 'SPOUSE', rel: 'Suami', label: '🤵 Suami' },
+                      { role: 'CHILD', rel: 'Anak', label: '👶 Anak' },
+                      { role: 'PARENT', rel: 'Orang Tua', label: '👴 Orang Tua' },
+                      { role: 'OTHER', rel: 'Lainnya', label: '🤝 Lainnya' },
+                    ].map((item) => {
+                      const isActive = inviteRelation === item.rel;
+                      return (
+                        <TouchableOpacity
+                          key={item.rel}
+                          style={[styles.relationBtn, isActive && styles.relationBtnActive]}
+                          onPress={() => {
+                            setInviteRole(item.role);
+                            setInviteRelation(item.rel);
+                          }}
+                        >
+                          <Text style={[styles.relationBtnText, isActive && styles.relationBtnTextActive]}>
+                            {item.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.inviteModalFooter}>
+              <TouchableOpacity
+                style={styles.inviteModalCancelBtn}
+                onPress={() => setIsInviteModalVisible(false)}
+                disabled={sendingInvite}
+              >
+                <Text style={styles.inviteModalCancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.inviteModalSubmitBtn, 
+                  (!selectedCandidate || sendingInvite) && { opacity: 0.5 }
+                ]}
+                onPress={handleSendInvitation}
+                disabled={!selectedCandidate || sendingInvite}
+              >
+                {sendingInvite ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.inviteModalSubmitText}>Kirim Undangan</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1040,10 +1312,143 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0'
   },
   familyHeaderName: { fontSize: 17, fontWeight: 'bold', color: '#0f172a' },
-  familySub: { fontSize: 13, fontWeight: 'bold', color: '#64748b', marginTop: 12, marginBottom: 6 },
-  familyMemberRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, paddingLeft: 6 },
-  familyMemberBullet: { fontSize: 14, color: '#3b82f6', marginRight: 8 },
-  familyMemberName: { fontSize: 14, color: '#334155', fontWeight: '500' },
+  familySub: { fontSize: 13, fontWeight: 'bold', color: '#64748b', marginTop: 12, marginBottom: 8 },
+  kkjBadge: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  kkjBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  familyMemberRowNew: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  familyMemberAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  familyMemberAvatarText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#2563eb',
+  },
+  familyMemberNameNew: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  familyMemberRoleNew: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  inviteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingVertical: 11,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  inviteBtnText: {
+    color: '#2563eb',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  invitationCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: '#bfdbfe',
+    ...Shadows.sm,
+  },
+  invitationFamilyName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1e3a8a',
+  },
+  invitationDetail: {
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  invitationActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  invitationBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  acceptBtn: {
+    backgroundColor: '#10b981',
+  },
+  rejectBtn: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  acceptBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  rejectBtnText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  noFamilyBox: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed',
+    marginBottom: 16,
+  },
+  noFamilyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  noFamilyDesc: {
+    fontSize: 12.5,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
   leaveFamilyBtn: {
     backgroundColor: '#fef2f2',
     borderWidth: 1,
@@ -1051,21 +1456,191 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
-    marginTop: 20
+    marginTop: 16
   },
   leaveFamilyBtnText: { color: '#ef4444', fontSize: 13, fontWeight: 'bold' },
   
   // Selection Sections
   subSection: { marginTop: 18, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 14 },
   subTitle: { fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 10 },
-  familiesList: { maxHeight: 120, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, backgroundColor: '#f8fafc', padding: 8, marginBottom: 14 },
-  familySelectItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#e2e8f0', alignItems: 'center' },
-  familySelectText: { fontSize: 13, color: '#334155', fontWeight: '500' },
-  joinText: { fontSize: 12, color: '#2563eb', fontWeight: 'bold' },
-  
   actionBtn: { backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
   actionBtnText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   emptyText: { fontSize: 13, color: '#64748b', lineHeight: 18, textAlign: 'center', marginVertical: 12 },
+
+  // Modal Invite styles
+  inviteModalContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 380,
+    maxHeight: '85%',
+    ...Shadows.lg,
+    overflow: 'hidden',
+  },
+  inviteModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  inviteModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  inviteModalSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  inviteCloseBtn: {
+    padding: 4,
+  },
+  inviteModalBody: {
+    padding: 20,
+  },
+  searchBarWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+  },
+  searchBarInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0f172a',
+    padding: 0,
+  },
+  noCandidateText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginVertical: 10,
+  },
+  candidateList: {
+    maxHeight: 180,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  candidateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#ffffff',
+  },
+  candidateCardActive: {
+    backgroundColor: '#eff6ff',
+  },
+  candidateAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  candidateAvatarActive: {
+    backgroundColor: '#dbeafe',
+  },
+  candidateAvatarText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#475569',
+  },
+  candidateAvatarTextActive: {
+    color: '#2563eb',
+  },
+  candidateName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  candidateNameActive: {
+    color: '#2563eb',
+  },
+  candidateSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  relationSection: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  relationGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  relationBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  relationBtnActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  relationBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  relationBtnTextActive: {
+    color: '#ffffff',
+  },
+  inviteModalFooter: {
+    flexDirection: 'row',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    backgroundColor: '#ffffff',
+    gap: 12,
+  },
+  inviteModalCancelBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+  },
+  inviteModalCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  inviteModalSubmitBtn: {
+    flex: 2,
+    paddingVertical: 11,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#2563eb',
+  },
+  inviteModalSubmitText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
 
   // Sacrament UI
   sacramentList: { marginBottom: 16 },

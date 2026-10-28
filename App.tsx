@@ -221,10 +221,56 @@ function MainApp() {
   );
 }
 
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('App ErrorBoundary caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.errorContainer}>
+          <Ionicons name="warning-outline" size={48} color={HolyGraceColors.goldPrimary} />
+          <Text style={styles.errorTitle}>Terjadi Kendala Memuat Tampilan</Text>
+          <Text style={styles.errorDesc}>
+            {this.state.error?.message || 'Silakan muat ulang halaman ini.'}
+          </Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              this.setState({ hasError: false, error: null });
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                window.location.reload();
+              }
+            }}
+          >
+            <Text style={styles.retryButtonText}>Muat Ulang Halaman</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
-      <MainApp />
+      <ErrorBoundary>
+        <MainApp />
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }
@@ -362,6 +408,41 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     color: HolyGraceColors.navySecondary,
+    fontWeight: '700',
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  errorDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 320,
+  },
+  retryButton: {
+    backgroundColor: HolyGraceColors.navySecondary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 20,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
     fontWeight: '700',
   },
 });

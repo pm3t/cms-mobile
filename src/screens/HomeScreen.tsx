@@ -279,13 +279,8 @@ export default function HomeScreen() {
                       color={HolyGraceColors.goldAccent}
                     />
                     <Text style={styles.scriptureBadgeText}>
-                      {isTodayVerse ? 'Ayat Hari Ini' : 'Ayat Alkitab'}
+                      Firman Tuhan Hari Ini
                     </Text>
-                    {currentVerse.topic ? (
-                      <Text style={styles.scriptureTopicText}>
-                        • {currentVerse.topic}
-                      </Text>
-                    ) : null}
                   </View>
                   <View style={styles.scriptureActionRow}>
                     {!isTodayVerse && (

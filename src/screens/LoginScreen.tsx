@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,18 +7,49 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
+  Modal,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { client, DEFAULT_TENANT_ID, getInitialTenantId } from '../api/client';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { client, DEFAULT_TENANT_ID, getInitialTenantId, parseChurchId } from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HolyGraceColors, Shadows } from '../theme/colors';
 
 export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [mode, setMode] = useState<'LOGIN' | 'REGISTER' | 'FORGOT' | 'RESET'>('LOGIN');
-  const [tenantId, setTenantId] = useState(() => getInitialTenantId());
+  const [tenantId, setTenantId] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // Scanner state
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
+  const [manualInput, setManualInput] = useState('');
+
+  // Load remembered church on mount
+  useEffect(() => {
+    const loadSavedChurch = async () => {
+      try {
+        // Priority 1: If opened with URL parameter (e.g. ?ChurchId=gpdi-vmm)
+        const fromUrl = getInitialTenantId();
+        if (fromUrl && fromUrl.trim()) {
+          const parsed = fromUrl.trim().toLowerCase();
+          setTenantId(parsed);
+          await AsyncStorage.setItem('mobile_tenant_id', parsed);
+          return;
+        }
+
+        // Priority 2: Load remembered church from previous login / PWA install
+        const saved = await AsyncStorage.getItem('mobile_tenant_id');
+        if (saved && saved.trim()) {
+          setTenantId(saved.trim());
+        }
+      } catch {}
+    };
+    loadSavedChurch();
+  }, []);
 
   // Register Fields
   const [firstName, setFirstName] = useState('');
@@ -32,6 +63,46 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const openScanner = async () => {
+    setError('');
+    if (Platform.OS !== 'web' && !permission?.granted) {
+      await requestPermission();
+    }
+    setScanned(false);
+    setIsScannerOpen(true);
+  };
+
+  const handleBarcodeScanned = async ({ data }: { data: string }) => {
+    if (!data || scanned) return;
+    setScanned(true);
+    const parsed = parseChurchId(data);
+    if (parsed) {
+      setTenantId(parsed);
+      await AsyncStorage.setItem('mobile_tenant_id', parsed);
+      setIsScannerOpen(false);
+      setSuccess(`Kode gereja "${parsed}" berhasil terhubung!`);
+      setTimeout(() => setSuccess(''), 4000);
+    } else {
+      setError('Format QR Code tidak dikenali sebagai kode gereja.');
+    }
+    setTimeout(() => setScanned(false), 1500);
+  };
+
+  const handleApplyManualInput = async () => {
+    if (!manualInput.trim()) return;
+    const parsed = parseChurchId(manualInput);
+    if (parsed) {
+      setTenantId(parsed);
+      await AsyncStorage.setItem('mobile_tenant_id', parsed);
+      setIsScannerOpen(false);
+      setManualInput('');
+      setSuccess(`Kode gereja "${parsed}" berhasil terhubung!`);
+      setTimeout(() => setSuccess(''), 4000);
+    } else {
+      setError('Kode atau URL gereja tidak valid.');
+    }
+  };
 
   const handleLoginOrRegister = async () => {
     if (!tenantId) {
@@ -224,18 +295,52 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
         {/* Form Fields */}
         {mode !== 'RESET' && (
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Kode Gereja (Church ID)</Text>
+            <View style={styles.inputLabelRow}>
+              <Text style={styles.inputLabel}>Kode Gereja (Church ID) *</Text>
+              <TouchableOpacity
+                style={styles.scanQRButton}
+                onPress={openScanner}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="qr-code-outline"
+                  size={13}
+                  color={HolyGraceColors.goldPrimary}
+                />
+                <Text style={styles.scanQRButtonText}>Scan QR</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.inputWrapper}>
-              <Ionicons name="business-outline" size={18} color={HolyGraceColors.textMuted} style={styles.inputIcon} />
+              <Ionicons
+                name="business-outline"
+                size={18}
+                color={HolyGraceColors.textMuted}
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.textInput}
-                placeholder="Contoh: gbi-hos"
+                placeholder="Contoh: gpdi-vmm atau gbi-hos"
                 placeholderTextColor={HolyGraceColors.textMuted}
                 value={tenantId}
                 onChangeText={setTenantId}
                 autoCapitalize="none"
               />
+              {tenantId ? (
+                <TouchableOpacity
+                  onPress={() => setTenantId('')}
+                  style={styles.clearIconButton}
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={16}
+                    color={HolyGraceColors.textMuted}
+                  />
+                </TouchableOpacity>
+              ) : null}
             </View>
+            <Text style={styles.helperText}>
+              Scan QR di banner/warta gereja atau ketik kode gereja Anda.
+            </Text>
           </View>
         )}
 
@@ -459,6 +564,112 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* QR Code Scanner Modal */}
+      <Modal
+        visible={isScannerOpen}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setIsScannerOpen(false)}
+      >
+        <View style={styles.scannerContainer}>
+          {/* Top Bar */}
+          <View style={styles.scannerHeader}>
+            <TouchableOpacity
+              onPress={() => setIsScannerOpen(false)}
+              style={styles.scannerCloseButton}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <View style={styles.scannerTitleContainer}>
+              <Text style={styles.scannerTitle}>Scan QR Code Gereja</Text>
+              <Text style={styles.scannerSubtitle}>
+                Arahkan kamera ke QR Code di banner atau warta gereja
+              </Text>
+            </View>
+          </View>
+
+          {/* Camera View or Fallback */}
+          <View style={styles.scannerCameraContainer}>
+            {Platform.OS !== 'web' && permission?.granted ? (
+              <CameraView
+                style={StyleSheet.absoluteFillObject}
+                barcodeScannerSettings={{
+                  barcodeTypes: ['qr'],
+                }}
+                onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+              />
+            ) : (
+              <View style={styles.noCameraFallback}>
+                <Ionicons
+                  name="qr-code-outline"
+                  size={52}
+                  color={HolyGraceColors.goldAccent}
+                />
+                <Text style={styles.noCameraTitle}>
+                  {Platform.OS === 'web'
+                    ? 'Kamera Web / Input Manual'
+                    : 'Izin Kamera Diperlukan'}
+                </Text>
+                <Text style={styles.noCameraDesc}>
+                  {Platform.OS === 'web'
+                    ? 'Di browser web, Anda dapat menempelkan URL atau kode QR gereja pada kolom di bawah.'
+                    : 'Izinkan akses kamera untuk memindai QR code gereja secara otomatis.'}
+                </Text>
+                {Platform.OS !== 'web' && !permission?.granted && (
+                  <TouchableOpacity
+                    style={styles.permissionButton}
+                    onPress={requestPermission}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name="shield-checkmark-outline"
+                      size={16}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.permissionButtonText}>Izinkan Kamera</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* Target Reticle Overlay */}
+            <View style={styles.reticleOverlay} pointerEvents="none">
+              <View style={styles.reticleBox}>
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
+              </View>
+            </View>
+          </View>
+
+          {/* Manual Input / Paste Section in Scanner */}
+          <View style={styles.scannerFooter}>
+            <Text style={styles.scannerFooterLabel}>
+              Atau tempel Link / URL / Kode QR Gereja:
+            </Text>
+            <View style={styles.manualInputRow}>
+              <TextInput
+                style={styles.manualTextInput}
+                placeholder="Contoh: https://app.eklesia.id?ChurchId=gpdi-vmm"
+                placeholderTextColor="#94A3B8"
+                value={manualInput}
+                onChangeText={setManualInput}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={styles.manualApplyButton}
+                onPress={handleApplyManualInput}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.manualApplyButtonText}>Terapkan</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -599,13 +810,35 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 14,
   },
+  inputLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
   inputLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: HolyGraceColors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 6,
+  },
+  scanQRButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: HolyGraceColors.goldLight,
+    borderWidth: 1,
+    borderColor: HolyGraceColors.goldBorder,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+  },
+  scanQRButtonText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: HolyGraceColors.goldPrimary,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -615,6 +848,16 @@ const styles = StyleSheet.create({
     borderColor: HolyGraceColors.border,
     borderRadius: 12,
     paddingHorizontal: 12,
+  },
+  clearIconButton: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  helperText: {
+    fontSize: 10.5,
+    color: HolyGraceColors.textMuted,
+    marginTop: 4,
+    marginLeft: 2,
   },
   inputIcon: {
     marginRight: 8,
@@ -672,5 +915,173 @@ const styles = StyleSheet.create({
     color: HolyGraceColors.navySecondary,
     fontSize: 13,
     fontWeight: '700',
+  },
+
+  // QR Scanner Modal
+  scannerContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+  },
+  scannerHeader: {
+    paddingTop: Platform.OS === 'ios' ? 56 : 32,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#1E293B',
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  scannerCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scannerTitleContainer: {
+    flex: 1,
+  },
+  scannerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  scannerSubtitle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  scannerCameraContainer: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#020617',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noCameraFallback: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: 320,
+  },
+  noCameraTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 14,
+    textAlign: 'center',
+  },
+  noCameraDesc: {
+    fontSize: 12.5,
+    color: '#94A3B8',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  permissionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: HolyGraceColors.goldPrimary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  permissionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  reticleOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reticleBox: {
+    width: 240,
+    height: 240,
+    position: 'relative',
+  },
+  corner: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
+    borderColor: HolyGraceColors.goldPrimary,
+  },
+  topLeft: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 14,
+  },
+  topRight: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 14,
+  },
+  bottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 14,
+  },
+  bottomRight: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 14,
+  },
+  scannerFooter: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 20,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  scannerFooterLabel: {
+    fontSize: 12,
+    color: '#CBD5E1',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  manualInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  manualTextInput: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#FFFFFF',
+    fontSize: 13,
+  },
+  manualApplyButton: {
+    backgroundColor: HolyGraceColors.goldPrimary,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manualApplyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

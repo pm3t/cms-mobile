@@ -21,6 +21,11 @@ import SmallGroupScreen from './SmallGroupScreen';
 import SacramentRequestScreen from './SacramentRequestScreen';
 import GameScreen from './GameScreen';
 import { HolyGraceColors, Shadows } from '../theme/colors';
+import {
+  DAILY_VERSES,
+  getTodayVerseIndex,
+  getVerseByIndex,
+} from '../data/dailyVerses';
 
 export default function HomeScreen() {
   const [events, setEvents] = useState<any[]>([]);
@@ -36,6 +41,18 @@ export default function HomeScreen() {
   const [isSmallGroupOpen, setIsSmallGroupOpen] = useState(false);
   const [isSacramentOpen, setIsSacramentOpen] = useState(false);
   const [isGameOpen, setIsGameOpen] = useState(false);
+  const [verseIndex, setVerseIndex] = useState(getTodayVerseIndex());
+
+  const currentVerse = getVerseByIndex(verseIndex);
+  const isTodayVerse = verseIndex === getTodayVerseIndex();
+
+  const handleNextVerse = () => {
+    setVerseIndex((prev) => (prev + 1) % DAILY_VERSES.length);
+  };
+
+  const handleResetToday = () => {
+    setVerseIndex(getTodayVerseIndex());
+  };
 
   const fetchProfile = async () => {
     try {
@@ -254,15 +271,60 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.scriptureBox}>
+                <View style={styles.scriptureTopRow}>
+                  <View style={styles.scriptureBadge}>
+                    <Ionicons
+                      name="sparkles"
+                      size={12}
+                      color={HolyGraceColors.goldAccent}
+                    />
+                    <Text style={styles.scriptureBadgeText}>
+                      {isTodayVerse ? 'Ayat Hari Ini' : 'Ayat Alkitab'}
+                    </Text>
+                    {currentVerse.topic ? (
+                      <Text style={styles.scriptureTopicText}>
+                        • {currentVerse.topic}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View style={styles.scriptureActionRow}>
+                    {!isTodayVerse && (
+                      <TouchableOpacity
+                        onPress={handleResetToday}
+                        style={styles.scriptureResetButton}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.scriptureResetText}>Hari Ini</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      onPress={handleNextVerse}
+                      style={styles.scriptureChangeButton}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="sync-outline"
+                        size={12}
+                        color={HolyGraceColors.goldAccent}
+                      />
+                      <Text style={styles.scriptureChangeText}>Ganti</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
                 <View style={styles.scriptureQuoteRow}>
                   <Text style={styles.scriptureQuoteSymbol}>“</Text>
-                  <Text style={styles.scriptureText}>
-                    Sebab Aku ini mengetahui rancangan-rancangan apa yang ada pada-Ku mengenai kamu, yaitu rancangan damai sejahtera dan bukan rancangan kecelakaan, untuk memberikan kepadamu hari depan yang penuh harapan.
-                  </Text>
+                  <Text style={styles.scriptureText}>{currentVerse.text}</Text>
                 </View>
                 <View style={styles.scriptureRefRow}>
-                  <Ionicons name="bookmark-outline" size={13} color={HolyGraceColors.goldPrimary} />
-                  <Text style={styles.scriptureRef}>Yeremia 29:11</Text>
+                  <Ionicons
+                    name="bookmark-outline"
+                    size={13}
+                    color={HolyGraceColors.goldPrimary}
+                  />
+                  <Text style={styles.scriptureRef}>
+                    {currentVerse.reference}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -558,6 +620,60 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  scriptureTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  scriptureBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 1,
+  },
+  scriptureBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: HolyGraceColors.goldAccent,
+  },
+  scriptureTopicText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  scriptureActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  scriptureResetButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  scriptureResetText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#E2E8F0',
+  },
+  scriptureChangeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(217, 119, 6, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(217, 119, 6, 0.3)',
+  },
+  scriptureChangeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: HolyGraceColors.goldAccent,
   },
   scriptureQuoteRow: {
     flexDirection: 'row',
